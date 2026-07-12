@@ -271,22 +271,20 @@ function ProductModal({ product, onSave, onClose }) {
         <input value={form.name} onChange={e => update('name', e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="如：完美口红" />
       </Field>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="品牌">
-          <input value={form.brand || ''} onChange={e => update('brand', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="如：兰蔻" />
-        </Field>
-        <Field label="条码">
-          <div className="flex gap-2">
-            <input value={form.barcode || ''} onChange={e => update('barcode', e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="商品条码" />
-            <button type="button" onClick={() => setShowScan(true)}
-              className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-1 whitespace-nowrap text-sm">
-              <ScanIcon className="w-4 h-4" /> 扫码
-            </button>
-          </div>
-        </Field>
-      </div>
+      <Field label="品牌">
+        <input value={form.brand || ''} onChange={e => update('brand', e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="如：兰蔻" />
+      </Field>
+      <Field label="条码">
+        <div className="flex gap-2">
+          <input value={form.barcode || ''} onChange={e => update('barcode', e.target.value)}
+            className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="商品条码" />
+          <button type="button" onClick={() => setShowScan(true)}
+            className="flex-shrink-0 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-1 whitespace-nowrap text-sm">
+            <ScanIcon className="w-4 h-4" /> 扫码
+          </button>
+        </div>
+      </Field>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="分类">
           <select value={form.category} onChange={e => update('category', e.target.value)}
