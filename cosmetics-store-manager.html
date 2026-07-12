@@ -1,0 +1,2555 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>美妆门店管理系统</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+</style>
+<script src="react.js"></script>
+<script src="react-dom.js"></script>
+<script src="tailwind.js"></script>
+<script src="prop-types.js"></script>
+<script src="recharts.min.js"></script>
+<script src="xlsx.full.min.js"></script>
+<script src="html5-qrcode.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script>
+function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
+// ===== 解构全局变量 =====
+const {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback
+} = React;
+const {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
+} = Recharts;
+
+// ===== 内联 SVG 图标组件 =====
+const Icon = ({
+  children,
+  className = "w-5 h-5",
+  ...props
+}) => /*#__PURE__*/React.createElement("svg", _extends({
+  xmlns: "http://www.w3.org/2000/svg",
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: "2",
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  className: className
+}, props), children);
+const CartIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("circle", {
+  cx: "9",
+  cy: "21",
+  r: "1"
+}), /*#__PURE__*/React.createElement("circle", {
+  cx: "20",
+  cy: "21",
+  r: "1"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"
+}));
+const BoxIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("path", {
+  d: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
+}), /*#__PURE__*/React.createElement("polyline", {
+  points: "3.27 6.96 12 12.01 20.73 6.96"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "22.96",
+  x2: "12",
+  y2: "12"
+}));
+const UsersIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("path", {
+  d: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+}), /*#__PURE__*/React.createElement("circle", {
+  cx: "9",
+  cy: "7",
+  r: "4"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M23 21v-2a4 4 0 0 0-3-3.87"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M16 3.13a4 4 0 0 1 0 7.75"
+}));
+const ChartIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("line", {
+  x1: "18",
+  y1: "20",
+  x2: "18",
+  y2: "10"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "20",
+  x2: "12",
+  y2: "4"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "6",
+  y1: "20",
+  x2: "6",
+  y2: "14"
+}));
+const PlusIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "5",
+  x2: "12",
+  y2: "19"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "5",
+  y1: "12",
+  x2: "19",
+  y2: "12"
+}));
+const TrashIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("polyline", {
+  points: "3 6 5 6 21 6"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+}));
+const EditIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("path", {
+  d: "M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+}));
+const SearchIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("circle", {
+  cx: "11",
+  cy: "11",
+  r: "8"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "21",
+  y1: "21",
+  x2: "16.65",
+  y2: "16.65"
+}));
+const UploadIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("path", {
+  d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+}), /*#__PURE__*/React.createElement("polyline", {
+  points: "17 8 12 3 7 8"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "3",
+  x2: "12",
+  y2: "15"
+}));
+const DownloadIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("path", {
+  d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+}), /*#__PURE__*/React.createElement("polyline", {
+  points: "7 10 12 15 17 10"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "15",
+  x2: "12",
+  y2: "3"
+}));
+const CloseIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("line", {
+  x1: "18",
+  y1: "6",
+  x2: "6",
+  y2: "18"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "6",
+  y1: "6",
+  x2: "18",
+  y2: "18"
+}));
+const MinusIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("line", {
+  x1: "5",
+  y1: "12",
+  x2: "19",
+  y2: "12"
+}));
+const CheckIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("polyline", {
+  points: "20 6 9 17 4 12"
+}));
+const TrendIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("polyline", {
+  points: "23 6 13.5 15.5 8.5 10.5 1 18"
+}), /*#__PURE__*/React.createElement("polyline", {
+  points: "17 6 23 6 23 12"
+}));
+const MoneyIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "1",
+  x2: "12",
+  y2: "23"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+}));
+const ReceiptIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("path", {
+  d: "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "8",
+  y1: "7",
+  x2: "16",
+  y2: "7"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "8",
+  y1: "12",
+  x2: "16",
+  y2: "12"
+}));
+const TagIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("path", {
+  d: "M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "7",
+  y1: "7",
+  x2: "7.01",
+  y2: "7"
+}));
+const ScanIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("path", {
+  d: "M3 7V4a1 1 0 0 1 1-1h3"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M17 3h3a1 1 0 0 1 1 1v3"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M21 17v3a1 1 0 0 1-1 1h-3"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M7 21H4a1 1 0 0 1-1-1v-3"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "7",
+  y1: "12",
+  x2: "17",
+  y2: "12"
+}));
+const CameraIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("path", {
+  d: "M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+}), /*#__PURE__*/React.createElement("circle", {
+  cx: "12",
+  cy: "13",
+  r: "4"
+}));
+
+// ===== 常量 =====
+const CATEGORIES = [{
+  id: 'skincare',
+  name: '护肤'
+}, {
+  id: 'makeup',
+  name: '彩妆'
+}, {
+  id: 'fragrance',
+  name: '香水'
+}, {
+  id: 'tools',
+  name: '工具'
+}, {
+  id: 'bodycare',
+  name: '身体护理'
+}, {
+  id: 'other',
+  name: '其他'
+}];
+const MEMBER_LEVELS = [{
+  id: 'normal',
+  name: '普通会员',
+  discount: 1.0,
+  color: 'text-gray-600',
+  bg: 'bg-gray-100',
+  minPoints: 0
+}, {
+  id: 'silver',
+  name: '银卡会员',
+  discount: 0.95,
+  color: 'text-gray-700',
+  bg: 'bg-gray-200',
+  minPoints: 500
+}, {
+  id: 'gold',
+  name: '金卡会员',
+  discount: 0.9,
+  color: 'text-yellow-700',
+  bg: 'bg-yellow-100',
+  minPoints: 2000
+}, {
+  id: 'diamond',
+  name: '钻石会员',
+  discount: 0.85,
+  color: 'text-blue-700',
+  bg: 'bg-blue-100',
+  minPoints: 5000
+}];
+const NAV_TABS = [{
+  id: 'pos',
+  name: '收银台',
+  icon: CartIcon
+}, {
+  id: 'products',
+  name: '商品管理',
+  icon: BoxIcon
+}, {
+  id: 'members',
+  name: '会员管理',
+  icon: UsersIcon
+}, {
+  id: 'stats',
+  name: '营业统计',
+  icon: ChartIcon
+}];
+
+// ===== 工具函数 =====
+const fmt = n => {
+  const num = Number(n) || 0;
+  return num.toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
+const fmtDate = d => {
+  const dt = new Date(d);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+};
+const todayStr = () => fmtDate(new Date());
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const getLevel = points => {
+  let level = MEMBER_LEVELS[0];
+  for (const l of MEMBER_LEVELS) {
+    if ((points || 0) >= l.minPoints) level = l;
+  }
+  return level;
+};
+
+// ===== 通用组件 =====
+function Modal({
+  title,
+  onClose,
+  children,
+  footer,
+  wide
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4",
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl shadow-2xl w-full max-h-[90vh] overflow-y-auto " + (wide ? "max-w-2xl" : "max-w-lg"),
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 sticky top-0 bg-white rounded-t-xl z-10"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "text-base sm:text-lg font-semibold text-gray-800"
+  }, title), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    className: "text-gray-400 hover:text-gray-600 transition-colors"
+  }, /*#__PURE__*/React.createElement(CloseIcon, {
+    className: "w-5 h-5"
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "px-4 sm:px-6 py-4"
+  }, children), footer && /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-end gap-2 px-4 sm:px-6 py-4 border-t border-gray-200"
+  }, footer)));
+}
+function Field({
+  label,
+  children,
+  required
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "mb-4"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "block text-sm font-medium text-gray-600 mb-1"
+  }, label, required && /*#__PURE__*/React.createElement("span", {
+    className: "text-red-500 ml-0.5"
+  }, "*")), children);
+}
+function StatCard({
+  icon: Ic,
+  label,
+  value,
+  color = "text-blue-600"
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl shadow-sm p-5 border border-gray-100"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between mb-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-sm text-gray-500"
+  }, label), /*#__PURE__*/React.createElement(Ic, {
+    className: "w-5 h-5 " + color
+  })), /*#__PURE__*/React.createElement("p", {
+    className: "text-2xl font-bold text-gray-800"
+  }, value));
+}
+function EmptyState({
+  icon: Ic,
+  title,
+  hint
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col items-center justify-center py-16 text-center"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4"
+  }, /*#__PURE__*/React.createElement(Ic, {
+    className: "w-8 h-8 text-gray-300"
+  })), /*#__PURE__*/React.createElement("p", {
+    className: "text-gray-500 font-medium mb-1"
+  }, title), hint && /*#__PURE__*/React.createElement("p", {
+    className: "text-sm text-gray-400"
+  }, hint));
+}
+
+// ===== 扫码弹窗 =====
+function ScanModal({
+  onScan,
+  onClose
+}) {
+  const scanRegionId = "scan-region-" + useRef(Math.random().toString(36).slice(2, 8)).current;
+  const scannerRef = useRef(null);
+  const [status, setStatus] = useState('正在启动摄像头...');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!window.Html5Qrcode) {
+      setError('扫码库未加载，请检查网络连接');
+      return;
+    }
+    let active = true;
+    const scanner = new Html5Qrcode(scanRegionId, {
+      verbose: false
+    });
+    scannerRef.current = scanner;
+    const config = {
+      fps: 10,
+      qrbox: {
+        width: 280,
+        height: 180
+      },
+      aspectRatio: 1.333
+    };
+    scanner.start({
+      facingMode: "environment"
+    }, config, decodedText => {
+      if (!active) return;
+      active = false;
+      scanner.stop().then(() => {
+        onScan(decodedText);
+      }).catch(() => {
+        onScan(decodedText);
+      });
+    }, err => {/* per-frame error, ignore */}).then(() => {
+      if (active) setStatus('摄像头已就绪，请将条码对准扫描框');
+    }).catch(err => {
+      if (!active) return;
+      const msg = String(err && err.message ? err.message : err);
+      if (msg.includes('Permission') || msg.includes('denied') || msg.includes('NotAllowed')) {
+        setError('摄像头权限被拒绝，请在浏览器设置中允许摄像头访问');
+      } else if (msg.includes('NotFound') || msg.includes('device')) {
+        setError('未检测到摄像头设备');
+      } else {
+        setError('摄像头启动失败：' + msg);
+      }
+    });
+    return () => {
+      active = false;
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.stop().catch(() => {});
+      }
+    };
+  }, []);
+  return /*#__PURE__*/React.createElement(Modal, {
+    title: "\u626B\u7801\u5F55\u5165",
+    onClose: onClose
+  }, error ? /*#__PURE__*/React.createElement("div", {
+    className: "text-center py-8"
+  }, /*#__PURE__*/React.createElement(CameraIcon, {
+    className: "w-12 h-12 text-red-300 mx-auto mb-3"
+  }), /*#__PURE__*/React.createElement("p", {
+    className: "text-red-500 mb-2"
+  }, error), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm text-gray-400"
+  }, "\u4F60\u4E5F\u53EF\u4EE5\u4F7F\u7528 USB \u626B\u7801\u67AA\uFF0C\u5728\u8F93\u5165\u6846\u4E2D\u76F4\u63A5\u626B\u7801")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    id: scanRegionId,
+    className: "rounded-lg overflow-hidden bg-gray-900 mb-3",
+    style: {
+      minHeight: '240px'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-center gap-2 text-sm text-gray-500"
+  }, /*#__PURE__*/React.createElement(ScanIcon, {
+    className: "w-4 h-4"
+  }), /*#__PURE__*/React.createElement("span", null, status))), /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-end mt-4"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    className: "px-4 py-2 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+  }, "\u5173\u95ED")));
+}
+
+// ===== 商品弹窗 =====
+function ProductModal({
+  product,
+  onSave,
+  onClose
+}) {
+  const [form, setForm] = useState(() => ({
+    name: '',
+    brand: '',
+    category: 'skincare',
+    price: '',
+    stock: '',
+    barcode: '',
+    description: '',
+    ...(product || {})
+  }));
+  const [showScan, setShowScan] = useState(false);
+  const update = (k, v) => setForm(f => ({
+    ...f,
+    [k]: v
+  }));
+  const submit = () => {
+    if (!form.name?.trim()) {
+      alert('请输入商品名称');
+      return;
+    }
+    if (!form.price || parseFloat(form.price) < 0) {
+      alert('请输入有效的价格');
+      return;
+    }
+    const data = {
+      ...form,
+      price: parseFloat(form.price) || 0,
+      stock: parseInt(form.stock) || 0,
+      category: form.category || 'other'
+    };
+    if (!data.id) data.id = uid();
+    onSave(data);
+  };
+  return /*#__PURE__*/React.createElement(Modal, {
+    title: product?.id ? '编辑商品' : '添加商品',
+    onClose: onClose,
+    footer: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+      onClick: onClose,
+      className: "px-4 py-2 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+    }, "\u53D6\u6D88"), /*#__PURE__*/React.createElement("button", {
+      onClick: submit,
+      className: "px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+    }, "\u4FDD\u5B58"))
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "\u5546\u54C1\u540D\u79F0",
+    required: true
+  }, /*#__PURE__*/React.createElement("input", {
+    value: form.name,
+    onChange: e => update('name', e.target.value),
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500",
+    placeholder: "\u5982\uFF1A\u5B8C\u7F8E\u53E3\u7EA2"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-3"
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "\u54C1\u724C"
+  }, /*#__PURE__*/React.createElement("input", {
+    value: form.brand || '',
+    onChange: e => update('brand', e.target.value),
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500",
+    placeholder: "\u5982\uFF1A\u5170\u853B"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "\u6761\u7801"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement("input", {
+    value: form.barcode || '',
+    onChange: e => update('barcode', e.target.value),
+    className: "flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500",
+    placeholder: "\u5546\u54C1\u6761\u7801"
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setShowScan(true),
+    className: "px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-1 whitespace-nowrap text-sm"
+  }, /*#__PURE__*/React.createElement(ScanIcon, {
+    className: "w-4 h-4"
+  }), " \u626B\u7801")))), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-3"
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "\u5206\u7C7B"
+  }, /*#__PURE__*/React.createElement("select", {
+    value: form.category,
+    onChange: e => update('category', e.target.value),
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+  }, CATEGORIES.map(c => /*#__PURE__*/React.createElement("option", {
+    key: c.id,
+    value: c.id
+  }, c.name)))), /*#__PURE__*/React.createElement(Field, {
+    label: "\u5355\u4EF7\uFF08\u5143\uFF09",
+    required: true
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    min: "0",
+    step: "0.01",
+    value: form.price,
+    onChange: e => update('price', e.target.value),
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500",
+    placeholder: "0.00"
+  }))), /*#__PURE__*/React.createElement(Field, {
+    label: "\u5E93\u5B58\u6570\u91CF"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    min: "0",
+    value: form.stock,
+    onChange: e => update('stock', e.target.value),
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500",
+    placeholder: "0"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "\u63CF\u8FF0"
+  }, /*#__PURE__*/React.createElement("textarea", {
+    value: form.description || '',
+    onChange: e => update('description', e.target.value),
+    rows: 2,
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500",
+    placeholder: "\u5546\u54C1\u63CF\u8FF0\uFF08\u9009\u586B\uFF09"
+  })), showScan && /*#__PURE__*/React.createElement(ScanModal, {
+    onScan: code => {
+      update('barcode', code);
+      setShowScan(false);
+    },
+    onClose: () => setShowScan(false)
+  }));
+}
+
+// ===== 导入弹窗 =====
+function ImportModal({
+  onImport,
+  onClose
+}) {
+  const [preview, setPreview] = useState(null);
+  const [error, setError] = useState('');
+  const [importing, setImporting] = useState(false);
+  const fileRef = useRef(null);
+  const downloadTemplate = () => {
+    const template = [{
+      商品名称: '示例商品',
+      品牌: '示例品牌',
+      分类: '护肤',
+      单价: 99.00,
+      库存: 100,
+      条码: '6900000000000',
+      描述: '商品描述'
+    }];
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '商品模板');
+    XLSX.writeFile(wb, '商品导入模板.xlsx');
+  };
+  const handleFile = file => {
+    if (!file) return;
+    setError('');
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {
+          type: 'array'
+        });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet);
+        if (!json.length) {
+          setError('文件中没有数据');
+          return;
+        }
+        const mapped = json.map(row => ({
+          name: row['商品名称'] || row['名称'] || row['name'] || '',
+          brand: row['品牌'] || row['brand'] || '',
+          category: (() => {
+            const cat = row['分类'] || row['类别'] || row['category'] || 'other';
+            const found = CATEGORIES.find(c => c.name === cat || c.id === cat);
+            return found ? found.id : 'other';
+          })(),
+          price: parseFloat(row['单价'] || row['价格'] || row['price'] || 0) || 0,
+          stock: parseInt(row['库存'] || row['数量'] || row['stock'] || 0) || 0,
+          barcode: String(row['条码'] || row['barcode'] || ''),
+          description: row['描述'] || row['说明'] || row['description'] || '',
+          id: uid()
+        }));
+        setPreview(mapped);
+      } catch (err) {
+        setError('文件解析失败：' + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+  const doImport = () => {
+    if (!preview || !preview.length) return;
+    setImporting(true);
+    onImport(preview);
+    setImporting(false);
+    onClose();
+  };
+  return /*#__PURE__*/React.createElement(Modal, {
+    title: "\u5BFC\u5165\u5546\u54C1",
+    onClose: onClose,
+    footer: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+      onClick: onClose,
+      className: "px-4 py-2 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+    }, "\u53D6\u6D88"), /*#__PURE__*/React.createElement("button", {
+      onClick: downloadTemplate,
+      className: "px-4 py-2 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-1"
+    }, /*#__PURE__*/React.createElement(DownloadIcon, {
+      className: "w-4 h-4"
+    }), " \u4E0B\u8F7D\u6A21\u677F"), /*#__PURE__*/React.createElement("button", {
+      onClick: doImport,
+      disabled: !preview || importing,
+      className: "px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+    }, importing ? '导入中...' : `导入${preview ? `(${preview.length}条)` : ''}`))
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mb-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors cursor-pointer",
+    onClick: () => fileRef.current?.click()
+  }, /*#__PURE__*/React.createElement(UploadIcon, {
+    className: "w-8 h-8 text-gray-400 mx-auto mb-2"
+  }), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm text-gray-600"
+  }, "\u70B9\u51FB\u9009\u62E9 Excel/CSV \u6587\u4EF6"), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-gray-400 mt-1"
+  }, "\u652F\u6301 .xlsx, .xls, .csv \u683C\u5F0F"), /*#__PURE__*/React.createElement("input", {
+    ref: fileRef,
+    type: "file",
+    accept: ".xlsx,.xls,.csv",
+    className: "hidden",
+    onChange: e => handleFile(e.target.files[0])
+  })), error && /*#__PURE__*/React.createElement("p", {
+    className: "text-sm text-red-500 mt-2"
+  }, error)), preview && preview.length > 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+    className: "text-sm text-gray-600 mb-2"
+  }, "\u9884\u89C8\uFF08\u524D5\u6761\uFF09\uFF1A"), /*#__PURE__*/React.createElement("div", {
+    className: "border border-gray-200 rounded-lg overflow-hidden"
+  }, /*#__PURE__*/React.createElement("table", {
+    className: "w-full text-sm"
+  }, /*#__PURE__*/React.createElement("thead", {
+    className: "bg-gray-50 text-gray-500"
+  }, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
+    className: "px-3 py-2 text-left"
+  }, "\u540D\u79F0"), /*#__PURE__*/React.createElement("th", {
+    className: "px-3 py-2 text-left"
+  }, "\u54C1\u724C"), /*#__PURE__*/React.createElement("th", {
+    className: "px-3 py-2 text-right"
+  }, "\u5355\u4EF7"), /*#__PURE__*/React.createElement("th", {
+    className: "px-3 py-2 text-right"
+  }, "\u5E93\u5B58"))), /*#__PURE__*/React.createElement("tbody", null, preview.slice(0, 5).map((item, i) => /*#__PURE__*/React.createElement("tr", {
+    key: i,
+    className: "border-t border-gray-100"
+  }, /*#__PURE__*/React.createElement("td", {
+    className: "px-3 py-2"
+  }, item.name), /*#__PURE__*/React.createElement("td", {
+    className: "px-3 py-2 text-gray-500"
+  }, item.brand || '-'), /*#__PURE__*/React.createElement("td", {
+    className: "px-3 py-2 text-right"
+  }, "\xA5", fmt(item.price)), /*#__PURE__*/React.createElement("td", {
+    className: "px-3 py-2 text-right"
+  }, item.stock)))))), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-gray-400 mt-1"
+  }, "\u5171 ", preview.length, " \u6761\u6570\u636E")));
+}
+
+// ===== POS 收银台 =====
+function DashboardPage({
+  products,
+  members,
+  onCheckout
+}) {
+  const [cart, setCart] = useState([]);
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('all');
+  const [memberId, setMemberId] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [showScan, setShowScan] = useState(false);
+  const [scanHint, setScanHint] = useState('');
+  const barcodeRef = useRef(null);
+  const filtered = useMemo(() => {
+    let list = products;
+    if (category !== 'all') list = list.filter(p => p.category === category);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q) || (p.brand || '').toLowerCase().includes(q) || (p.barcode || '').includes(search.trim()));
+    }
+    return list;
+  }, [products, search, category]);
+  const cartTotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.qty, 0), [cart]);
+  const member = members.find(m => m.id === memberId);
+  const level = member ? getLevel(member.points) : MEMBER_LEVELS[0];
+  const discount = level.discount;
+  const finalTotal = cartTotal * discount;
+  const addToCart = product => {
+    setCart(c => {
+      const exist = c.find(i => i.id === product.id);
+      if (exist) {
+        if (exist.qty >= (product.stock || 0)) {
+          alert('库存不足');
+          return c;
+        }
+        return c.map(i => i.id === product.id ? {
+          ...i,
+          qty: i.qty + 1
+        } : i);
+      }
+      if ((product.stock || 0) < 1) {
+        alert('库存不足');
+        return c;
+      }
+      return [...c, {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        qty: 1,
+        stock: product.stock
+      }];
+    });
+  };
+
+  // 条码查找并加入购物车
+  const handleBarcode = code => {
+    const barcode = (code || '').trim();
+    if (!barcode) return;
+    const product = products.find(p => p.barcode === barcode);
+    if (product) {
+      addToCart(product);
+      setScanHint('');
+    } else {
+      setScanHint('未找到条码为 ' + barcode + ' 的商品');
+      setTimeout(() => setScanHint(''), 3000);
+    }
+  };
+
+  // USB 扫码枪：监听快速输入 + Enter
+  const handleBarcodeKeyDown = e => {
+    if (e.key === 'Enter') {
+      const val = e.target.value.trim();
+      if (val) {
+        handleBarcode(val);
+        e.target.value = '';
+      }
+    }
+  };
+
+  // 摄像头扫码回调
+  const handleCameraScan = code => {
+    setShowScan(false);
+    handleBarcode(code);
+  };
+
+  // 自动聚焦扫码输入框
+  useEffect(() => {
+    barcodeRef.current?.focus();
+  }, [products.length]);
+  const removeFromCart = id => setCart(c => c.filter(i => i.id !== id));
+  const updateQty = (id, delta) => setCart(c => c.map(i => {
+    if (i.id !== id) return i;
+    const newQty = i.qty + delta;
+    if (newQty < 1) return i;
+    if (newQty > (i.stock || 0)) {
+      alert('库存不足');
+      return i;
+    }
+    return {
+      ...i,
+      qty: newQty
+    };
+  }));
+  const checkout = () => {
+    if (!cart.length) {
+      alert('购物车为空');
+      return;
+    }
+    onCheckout({
+      items: cart.map(i => ({
+        id: i.id,
+        name: i.name,
+        price: i.price,
+        qty: i.qty
+      })),
+      memberId: memberId || null,
+      subtotal: cartTotal,
+      discount: discount,
+      total: finalTotal,
+      memberName: member ? member.name : null,
+      levelName: level.name
+    });
+    setCart([]);
+    setMemberId('');
+  };
+  const filteredMembers = useMemo(() => {
+    if (!searching || !search.trim()) return [];
+    const q = search.trim().toLowerCase();
+    return members.filter(m => m.name.toLowerCase().includes(q) || (m.phone || '').includes(search.trim()));
+  }, [members, search, searching]);
+  return /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-4 lg:gap-6 h-[calc(100vh-96px)] lg:h-[calc(100vh-128px)]"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "hidden lg:block w-44 flex-shrink-0"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-full flex flex-col"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "px-4 py-3 border-b border-gray-200"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-semibold text-gray-800 text-sm"
+  }, "\u5546\u54C1\u5206\u7C7B")), /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 overflow-y-auto py-2"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setCategory('all'),
+    className: "w-full text-left px-4 py-2 text-sm transition-colors " + (category === 'all' ? "bg-blue-50 text-blue-600 font-medium border-l-2 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-2 border-transparent")
+  }, "\u5168\u90E8\u5546\u54C1"), CATEGORIES.map(c => /*#__PURE__*/React.createElement("button", {
+    key: c.id,
+    onClick: () => setCategory(c.id),
+    className: "w-full text-left px-4 py-2 text-sm transition-colors " + (category === c.id ? "bg-blue-50 text-blue-600 font-medium border-l-2 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-2 border-transparent")
+  }, c.name))))), /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 flex flex-col min-w-0"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2 mb-3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 relative"
+  }, /*#__PURE__*/React.createElement(ScanIcon, {
+    className: "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500"
+  }), /*#__PURE__*/React.createElement("input", {
+    ref: barcodeRef,
+    onKeyDown: handleBarcodeKeyDown,
+    placeholder: "\u626B\u7801\u5F55\u5165\uFF08USB \u626B\u7801\u67AA\u6216\u8F93\u5165\u6761\u7801\u540E\u56DE\u8F66\uFF09",
+    className: "w-full pl-9 pr-3 py-2 border-2 border-blue-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/30"
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowScan(true),
+    className: "px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-1.5 whitespace-nowrap text-sm"
+  }, /*#__PURE__*/React.createElement(CameraIcon, {
+    className: "w-4 h-4"
+  }), " ", /*#__PURE__*/React.createElement("span", {
+    className: "hidden sm:inline"
+  }, "\u6444\u50CF\u5934\u626B\u7801"), /*#__PURE__*/React.createElement("span", {
+    className: "sm:hidden"
+  }, "\u626B\u7801"))), scanHint && /*#__PURE__*/React.createElement("div", {
+    className: "mb-3 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-600"
+  }, scanHint), /*#__PURE__*/React.createElement("div", {
+    className: "lg:hidden mb-3 flex gap-2 overflow-x-auto pb-1"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setCategory('all'),
+    className: "px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors " + (category === 'all' ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50")
+  }, "\u5168\u90E8"), CATEGORIES.map(c => /*#__PURE__*/React.createElement("button", {
+    key: c.id,
+    onClick: () => setCategory(c.id),
+    className: "px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors " + (category === c.id ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50")
+  }, c.name))), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-3 mb-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 relative"
+  }, /*#__PURE__*/React.createElement(SearchIcon, {
+    className: "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+  }), /*#__PURE__*/React.createElement("input", {
+    value: search,
+    onChange: e => {
+      setSearch(e.target.value);
+      setSearching(true);
+    },
+    onBlur: () => setTimeout(() => setSearching(false), 200),
+    placeholder: "\u641C\u7D22\u5546\u54C1\u540D\u79F0\u3001\u54C1\u724C\u6216\u6761\u7801...",
+    className: "w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+  }), searching && filteredMembers.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "px-3 py-1 text-xs text-gray-400 border-b border-gray-100"
+  }, "\u4F1A\u5458\u5339\u914D"), filteredMembers.map(m => /*#__PURE__*/React.createElement("button", {
+    key: m.id,
+    onClick: () => {
+      setMemberId(m.id);
+      setSearch('');
+      setSearching(false);
+    },
+    className: "w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors text-sm"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-medium"
+  }, m.name), /*#__PURE__*/React.createElement("span", {
+    className: "text-gray-400 ml-2"
+  }, m.phone || ''), /*#__PURE__*/React.createElement("span", {
+    className: "text-gray-400 ml-2"
+  }, "\xB7 ", getLevel(m.points).name)))))), /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 overflow-y-auto"
+  }, products.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
+    icon: BoxIcon,
+    title: "\u6682\u65E0\u5546\u54C1",
+    hint: "\u8BF7\u5148\u5728\u5546\u54C1\u7BA1\u7406\u4E2D\u6DFB\u52A0\u5546\u54C1"
+  }) : filtered.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
+    icon: SearchIcon,
+    title: "\u672A\u627E\u5230\u5339\u914D\u5546\u54C1",
+    hint: "\u8BD5\u8BD5\u5176\u4ED6\u5173\u952E\u8BCD\u6216\u5206\u7C7B"
+  }) : /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3"
+  }, filtered.map(p => {
+    const cat = CATEGORIES.find(c => c.id === p.category);
+    return /*#__PURE__*/React.createElement("button", {
+      key: p.id,
+      onClick: () => addToCart(p),
+      disabled: (p.stock || 0) < 1,
+      className: "bg-white rounded-lg shadow-sm border border-gray-100 p-3 text-left hover:shadow-md hover:border-blue-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-start justify-between mb-1"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "font-medium text-gray-800 text-sm line-clamp-2 flex-1"
+    }, p.name), (p.stock || 0) < 1 && /*#__PURE__*/React.createElement("span", {
+      className: "text-xs text-red-400 ml-1"
+    }, "\u7F3A\u8D27")), /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-1 mb-2 flex-wrap"
+    }, p.brand && /*#__PURE__*/React.createElement("span", {
+      className: "inline-block text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-medium"
+    }, p.brand), cat && /*#__PURE__*/React.createElement("span", {
+      className: "inline-block text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500"
+    }, cat.name)), /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center justify-between"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "text-blue-600 font-bold"
+    }, "\xA5", fmt(p.price)), /*#__PURE__*/React.createElement("span", {
+      className: "text-xs text-gray-400"
+    }, "\u5E93\u5B58 ", p.stock || 0)));
+  })))), /*#__PURE__*/React.createElement("div", {
+    className: "w-72 lg:w-80 flex-shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "px-4 py-3 border-b border-gray-200 flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement(CartIcon, {
+    className: "w-5 h-5 text-blue-600"
+  }), /*#__PURE__*/React.createElement("h3", {
+    className: "font-semibold text-gray-800"
+  }, "\u8D2D\u7269\u8F66"), /*#__PURE__*/React.createElement("span", {
+    className: "ml-auto text-sm text-gray-400"
+  }, cart.length, " \u4EF6")), /*#__PURE__*/React.createElement("div", {
+    className: "px-4 py-3 border-b border-gray-200"
+  }, member ? /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "text-sm font-medium text-gray-700"
+  }, member.name), /*#__PURE__*/React.createElement("span", {
+    className: "ml-2 text-xs px-2 py-0.5 rounded-full " + level.bg + " " + level.color
+  }, level.name)), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setMemberId(''),
+    className: "text-gray-400 hover:text-gray-600"
+  }, /*#__PURE__*/React.createElement(CloseIcon, {
+    className: "w-4 h-4"
+  }))) : /*#__PURE__*/React.createElement("div", {
+    className: "text-sm text-gray-400"
+  }, members.length === 0 ? '暂无会员数据' : '搜索或选择会员')), /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 overflow-y-auto px-4 py-3"
+  }, cart.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col items-center justify-center h-full text-gray-300"
+  }, /*#__PURE__*/React.createElement(CartIcon, {
+    className: "w-12 h-12 mb-2"
+  }), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm"
+  }, "\u8D2D\u7269\u8F66\u7A7A\u7A7A\u5982\u4E5F")) : /*#__PURE__*/React.createElement("div", {
+    className: "space-y-2"
+  }, cart.map(item => /*#__PURE__*/React.createElement("div", {
+    key: item.id,
+    className: "flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 min-w-0"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-sm font-medium text-gray-700 truncate"
+  }, item.name), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-gray-400"
+  }, "\xA5", fmt(item.price), " \xD7 ", item.qty)), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-1"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => updateQty(item.id, -1),
+    className: "w-6 h-6 rounded flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600"
+  }, /*#__PURE__*/React.createElement(MinusIcon, {
+    className: "w-3 h-3"
+  })), /*#__PURE__*/React.createElement("span", {
+    className: "w-6 text-center text-sm"
+  }, item.qty), /*#__PURE__*/React.createElement("button", {
+    onClick: () => updateQty(item.id, 1),
+    className: "w-6 h-6 rounded flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600"
+  }, /*#__PURE__*/React.createElement(PlusIcon, {
+    className: "w-3 h-3"
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: () => removeFromCart(item.id),
+    className: "ml-1 text-red-400 hover:text-red-600"
+  }, /*#__PURE__*/React.createElement(TrashIcon, {
+    className: "w-3.5 h-3.5"
+  }))))))), cart.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "px-4 py-3 border-t border-gray-200 space-y-2"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-between text-sm text-gray-500"
+  }, /*#__PURE__*/React.createElement("span", null, "\u5C0F\u8BA1"), /*#__PURE__*/React.createElement("span", null, "\xA5", fmt(cartTotal))), discount < 1.0 && /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-between text-sm text-gray-500"
+  }, /*#__PURE__*/React.createElement("span", null, "\u4F1A\u5458\u6298\u6263 (", level.name, " ", (1 - discount) * 100, "%off)"), /*#__PURE__*/React.createElement("span", null, "-\xA5", fmt(cartTotal - finalTotal))), /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-between items-center pt-2 border-t border-gray-100"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "font-semibold text-gray-700"
+  }, "\u5408\u8BA1"), /*#__PURE__*/React.createElement("span", {
+    className: "text-xl font-bold text-blue-600"
+  }, "\xA5", fmt(finalTotal))), /*#__PURE__*/React.createElement("button", {
+    onClick: checkout,
+    className: "w-full py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 font-medium"
+  }, /*#__PURE__*/React.createElement(CheckIcon, {
+    className: "w-4 h-4"
+  }), " \u7ED3\u8D26"))), showScan && /*#__PURE__*/React.createElement(ScanModal, {
+    onScan: handleCameraScan,
+    onClose: () => setShowScan(false)
+  }));
+}
+
+// ===== 商品管理 =====
+function ProductsPage({
+  products,
+  onSaveProduct,
+  onDeleteProduct,
+  onImport
+}) {
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('all');
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [showImport, setShowImport] = useState(false);
+  const [showScan, setShowScan] = useState(false);
+  const [scanHint, setScanHint] = useState('');
+  const barcodeRef = useRef(null);
+  const filtered = useMemo(() => {
+    let list = products;
+    if (category !== 'all') list = list.filter(p => p.category === category);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q) || (p.brand || '').toLowerCase().includes(q) || (p.barcode || '').includes(search.trim()));
+    }
+    return list;
+  }, [products, search, category]);
+  const handleAdd = () => {
+    setEditing(null);
+    setShowModal(true);
+  };
+  const handleEdit = p => {
+    setEditing(p);
+    setShowModal(true);
+  };
+  const handleSave = data => {
+    onSaveProduct(data);
+    setShowModal(false);
+  };
+  const handleDelete = p => {
+    if (confirm(`确定删除"${p.name}"吗？`)) onDeleteProduct(p.id);
+  };
+
+  // 扫码录入：条码查找商品
+  const handleBarcode = code => {
+    const barcode = (code || '').trim();
+    if (!barcode) return;
+    const existing = products.find(p => p.barcode === barcode);
+    if (existing) {
+      setEditing(existing);
+      setShowModal(true);
+      setScanHint('');
+    } else {
+      setEditing({
+        barcode
+      });
+      setShowModal(true);
+      setScanHint('');
+    }
+  };
+
+  // USB 扫码枪：监听 Enter
+  const handleBarcodeKeyDown = e => {
+    if (e.key === 'Enter') {
+      const val = e.target.value.trim();
+      if (val) {
+        handleBarcode(val);
+        e.target.value = '';
+      }
+    }
+  };
+  const handleCameraScan = code => {
+    setShowScan(false);
+    handleBarcode(code);
+  };
+  useEffect(() => {
+    if (!showModal && !showImport && !showScan) {
+      barcodeRef.current?.focus();
+    }
+  }, [showModal, showImport, showScan]);
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-wrap gap-2 mb-3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 min-w-[200px] relative"
+  }, /*#__PURE__*/React.createElement(ScanIcon, {
+    className: "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500"
+  }), /*#__PURE__*/React.createElement("input", {
+    ref: barcodeRef,
+    onKeyDown: handleBarcodeKeyDown,
+    placeholder: "\u626B\u7801\u5F55\u5165\u5546\u54C1\uFF08USB \u626B\u7801\u67AA\u6216\u8F93\u5165\u6761\u7801\u540E\u56DE\u8F66\uFF0C\u5DF2\u5B58\u5728\u5219\u7F16\u8F91\uFF0C\u4E0D\u5B58\u5728\u5219\u65B0\u589E\uFF09",
+    className: "w-full pl-9 pr-3 py-2 border-2 border-indigo-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-indigo-50/30"
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowScan(true),
+    className: "px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-1.5 whitespace-nowrap text-sm"
+  }, /*#__PURE__*/React.createElement(CameraIcon, {
+    className: "w-4 h-4"
+  }), " ", /*#__PURE__*/React.createElement("span", {
+    className: "hidden sm:inline"
+  }, "\u6444\u50CF\u5934\u626B\u7801"), /*#__PURE__*/React.createElement("span", {
+    className: "sm:hidden"
+  }, "\u626B\u7801"))), scanHint && /*#__PURE__*/React.createElement("div", {
+    className: "mb-3 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-600"
+  }, scanHint), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-wrap items-center gap-3 mb-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 min-w-[180px] relative"
+  }, /*#__PURE__*/React.createElement(SearchIcon, {
+    className: "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+  }), /*#__PURE__*/React.createElement("input", {
+    value: search,
+    onChange: e => setSearch(e.target.value),
+    placeholder: "\u641C\u7D22\u5546\u54C1\u540D\u79F0\u3001\u54C1\u724C\u6216\u6761\u7801...",
+    className: "w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+  })), /*#__PURE__*/React.createElement("select", {
+    value: category,
+    onChange: e => setCategory(e.target.value),
+    className: "px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "all"
+  }, "\u5168\u90E8\u5206\u7C7B"), CATEGORIES.map(c => /*#__PURE__*/React.createElement("option", {
+    key: c.id,
+    value: c.id
+  }, c.name))), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowImport(true),
+    className: "px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1.5 whitespace-nowrap text-sm"
+  }, /*#__PURE__*/React.createElement(UploadIcon, {
+    className: "w-4 h-4"
+  }), " \u5BFC\u5165"), /*#__PURE__*/React.createElement("button", {
+    onClick: handleAdd,
+    className: "px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 whitespace-nowrap text-sm"
+  }, /*#__PURE__*/React.createElement(PlusIcon, {
+    className: "w-4 h-4"
+  }), " \u6DFB\u52A0\u5546\u54C1")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+  }, filtered.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
+    icon: BoxIcon,
+    title: products.length === 0 ? "暂无商品数据" : "未找到匹配商品",
+    hint: products.length === 0 ? "点击「添加商品」或「导入」开始管理" : "试试其他关键词"
+  }) : /*#__PURE__*/React.createElement("div", {
+    className: "overflow-x-auto"
+  }, /*#__PURE__*/React.createElement("table", {
+    className: "w-full text-sm min-w-[640px]"
+  }, /*#__PURE__*/React.createElement("thead", {
+    className: "bg-gray-50 text-gray-500"
+  }, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
+    className: "px-4 py-3 text-left font-medium"
+  }, "\u5546\u54C1\u540D\u79F0"), /*#__PURE__*/React.createElement("th", {
+    className: "px-4 py-3 text-left font-medium"
+  }, "\u54C1\u724C"), /*#__PURE__*/React.createElement("th", {
+    className: "px-4 py-3 text-left font-medium"
+  }, "\u5206\u7C7B"), /*#__PURE__*/React.createElement("th", {
+    className: "px-4 py-3 text-right font-medium"
+  }, "\u5355\u4EF7"), /*#__PURE__*/React.createElement("th", {
+    className: "px-4 py-3 text-right font-medium"
+  }, "\u5E93\u5B58"), /*#__PURE__*/React.createElement("th", {
+    className: "px-4 py-3 text-center font-medium"
+  }, "\u64CD\u4F5C"))), /*#__PURE__*/React.createElement("tbody", null, filtered.map(p => {
+    const cat = CATEGORIES.find(c => c.id === p.category);
+    return /*#__PURE__*/React.createElement("tr", {
+      key: p.id,
+      className: "border-t border-gray-100 hover:bg-gray-50 transition-colors"
+    }, /*#__PURE__*/React.createElement("td", {
+      className: "px-4 py-3 font-medium text-gray-800"
+    }, p.name), /*#__PURE__*/React.createElement("td", {
+      className: "px-4 py-3 text-gray-500"
+    }, p.brand || '-'), /*#__PURE__*/React.createElement("td", {
+      className: "px-4 py-3 text-gray-500"
+    }, cat ? cat.name : '-'), /*#__PURE__*/React.createElement("td", {
+      className: "px-4 py-3 text-right text-blue-600 font-medium"
+    }, "\xA5", fmt(p.price)), /*#__PURE__*/React.createElement("td", {
+      className: "px-4 py-3 text-right"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: (p.stock || 0) < 10 ? 'text-red-500 font-medium' : 'text-gray-600'
+    }, p.stock || 0)), /*#__PURE__*/React.createElement("td", {
+      className: "px-4 py-3"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center justify-center gap-2"
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleEdit(p),
+      className: "text-blue-500 hover:text-blue-700 transition-colors"
+    }, /*#__PURE__*/React.createElement(EditIcon, {
+      className: "w-4 h-4"
+    })), /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleDelete(p),
+      className: "text-red-400 hover:text-red-600 transition-colors"
+    }, /*#__PURE__*/React.createElement(TrashIcon, {
+      className: "w-4 h-4"
+    })))));
+  }))))), showModal && /*#__PURE__*/React.createElement(ProductModal, {
+    product: editing,
+    onSave: handleSave,
+    onClose: () => setShowModal(false)
+  }), showImport && /*#__PURE__*/React.createElement(ImportModal, {
+    onImport: onImport,
+    onClose: () => setShowImport(false)
+  }), showScan && /*#__PURE__*/React.createElement(ScanModal, {
+    onScan: handleCameraScan,
+    onClose: () => setShowScan(false)
+  }));
+}
+
+// ===== 会员弹窗 =====
+function MemberModal({
+  member,
+  onSave,
+  onClose
+}) {
+  const [form, setForm] = useState(() => member ? {
+    ...member
+  } : {
+    name: '',
+    phone: '',
+    level: 'normal',
+    points: '',
+    birthday: '',
+    email: '',
+    address: ''
+  });
+  const update = (k, v) => setForm(f => ({
+    ...f,
+    [k]: v
+  }));
+  const submit = () => {
+    if (!form.name?.trim()) {
+      alert('请输入会员姓名');
+      return;
+    }
+    const data = {
+      ...form,
+      points: parseInt(form.points) || 0,
+      level: form.level || 'normal'
+    };
+    if (!data.id) data.id = uid();
+    if (!data.createdAt) data.createdAt = new Date().toISOString();
+    onSave(data);
+  };
+  return /*#__PURE__*/React.createElement(Modal, {
+    title: member ? '编辑会员' : '添加会员',
+    onClose: onClose,
+    footer: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+      onClick: onClose,
+      className: "px-4 py-2 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+    }, "\u53D6\u6D88"), /*#__PURE__*/React.createElement("button", {
+      onClick: submit,
+      className: "px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+    }, "\u4FDD\u5B58"))
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "\u4F1A\u5458\u59D3\u540D",
+    required: true
+  }, /*#__PURE__*/React.createElement("input", {
+    value: form.name,
+    onChange: e => update('name', e.target.value),
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500",
+    placeholder: "\u5982\uFF1A\u5F20\u4E09"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-3"
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "\u624B\u673A\u53F7"
+  }, /*#__PURE__*/React.createElement("input", {
+    value: form.phone || '',
+    onChange: e => update('phone', e.target.value),
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500",
+    placeholder: "\u624B\u673A\u53F7\u7801"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "\u79EF\u5206"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    min: "0",
+    value: form.points,
+    onChange: e => update('points', e.target.value),
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500",
+    placeholder: "0"
+  }))), /*#__PURE__*/React.createElement(Field, {
+    label: "\u6298\u7B97\u4EF7\u683C\uFF08\u79EF\u5206 \xD7 0.05\uFF09"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-blue-600 font-medium"
+  }, "\xA5", fmt((parseInt(form.points) || 0) * 0.05), /*#__PURE__*/React.createElement("span", {
+    className: "ml-2 text-xs text-gray-400"
+  }, "\uFF08", parseInt(form.points) || 0, " \u79EF\u5206\uFF09"))), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-3"
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "\u4F1A\u5458\u7B49\u7EA7"
+  }, /*#__PURE__*/React.createElement("select", {
+    value: form.level,
+    onChange: e => update('level', e.target.value),
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+  }, MEMBER_LEVELS.map(l => /*#__PURE__*/React.createElement("option", {
+    key: l.id,
+    value: l.id
+  }, l.name, "\uFF08", (l.discount * 10).toFixed(1), "\u6298\uFF09")))), /*#__PURE__*/React.createElement(Field, {
+    label: "\u751F\u65E5"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    value: form.birthday || '',
+    onChange: e => update('birthday', e.target.value),
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+  }))), /*#__PURE__*/React.createElement(Field, {
+    label: "\u90AE\u7BB1"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "email",
+    value: form.email || '',
+    onChange: e => update('email', e.target.value),
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500",
+    placeholder: "\u7535\u5B50\u90AE\u7BB1"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "\u5730\u5740"
+  }, /*#__PURE__*/React.createElement("textarea", {
+    value: form.address || '',
+    onChange: e => update('address', e.target.value),
+    rows: 2,
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500",
+    placeholder: "\u8054\u7CFB\u5730\u5740\uFF08\u9009\u586B\uFF09"
+  })));
+}
+
+// 积分记录弹窗
+function PointsRecordsModal({
+  member,
+  records,
+  onAdjust,
+  onClose
+}) {
+  const [adjustPoints, setAdjustPoints] = useState('');
+  const [adjustReason, setAdjustReason] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const memberRecords = useMemo(() => {
+    if (!member) return [];
+    return records.filter(r => r.memberId === member.id).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [records, member]);
+  const totalIn = memberRecords.filter(r => r.points > 0).reduce((s, r) => s + r.points, 0);
+  const totalOut = memberRecords.filter(r => r.points < 0).reduce((s, r) => s + r.points, 0);
+  const handleAdjust = () => {
+    const pts = parseInt(adjustPoints);
+    if (isNaN(pts) || pts === 0) return;
+    onAdjust({
+      id: uid(),
+      memberId: member.id,
+      memberName: member.name,
+      points: pts,
+      type: '手动调整',
+      description: adjustReason.trim() || (pts > 0 ? '手动增加积分' : '手动扣减积分'),
+      date: todayStr(),
+      createdAt: new Date().toISOString()
+    });
+    setAdjustPoints('');
+    setAdjustReason('');
+    setShowForm(false);
+  };
+  const typeBadge = type => {
+    if (type === '购买积分') return 'bg-green-100 text-green-700';
+    if (type === '退货扣减') return 'bg-orange-100 text-orange-700';
+    return 'bg-gray-100 text-gray-600';
+  };
+  return /*#__PURE__*/React.createElement(Modal, {
+    title: `${member.name} 的积分记录`,
+    onClose: onClose,
+    wide: true
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-3 gap-3 mb-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-blue-50 rounded-lg p-3 text-center"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-gray-500"
+  }, "\u5F53\u524D\u79EF\u5206"), /*#__PURE__*/React.createElement("p", {
+    className: "text-lg font-bold text-blue-600"
+  }, member.points || 0)), /*#__PURE__*/React.createElement("div", {
+    className: "bg-green-50 rounded-lg p-3 text-center"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-gray-500"
+  }, "\u7D2F\u8BA1\u83B7\u5F97"), /*#__PURE__*/React.createElement("p", {
+    className: "text-lg font-bold text-green-600"
+  }, "+", totalIn)), /*#__PURE__*/React.createElement("div", {
+    className: "bg-orange-50 rounded-lg p-3 text-center"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-gray-500"
+  }, "\u7D2F\u8BA1\u6263\u51CF"), /*#__PURE__*/React.createElement("p", {
+    className: "text-lg font-bold text-orange-600"
+  }, totalOut))), !showForm ? /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowForm(true),
+    className: "mb-3 px-3 py-1.5 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-1.5"
+  }, /*#__PURE__*/React.createElement(PlusIcon, {
+    className: "w-3.5 h-3.5"
+  }), " \u624B\u52A8\u8C03\u6574\u79EF\u5206") : /*#__PURE__*/React.createElement("div", {
+    className: "mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-wrap items-end gap-2"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: "text-xs text-gray-500 block mb-1"
+  }, "\u79EF\u5206\u53D8\u5316"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    value: adjustPoints,
+    onChange: e => setAdjustPoints(e.target.value),
+    placeholder: "\u6B63\u6570\u589E\u52A0\uFF0C\u8D1F\u6570\u6263\u51CF",
+    className: "w-40 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 min-w-[160px]"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "text-xs text-gray-500 block mb-1"
+  }, "\u539F\u56E0\uFF08\u9009\u586B\uFF09"), /*#__PURE__*/React.createElement("input", {
+    value: adjustReason,
+    onChange: e => setAdjustReason(e.target.value),
+    placeholder: "\u5982\uFF1A\u6D3B\u52A8\u8D60\u9001\u3001\u79EF\u5206\u8FC7\u671F\u7B49",
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: handleAdjust,
+    className: "px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm transition-colors"
+  }, "\u786E\u8BA4"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowForm(false),
+    className: "px-4 py-2 text-gray-500 border border-gray-300 rounded-lg hover:bg-gray-100 text-sm transition-colors"
+  }, "\u53D6\u6D88"))), memberRecords.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "text-center py-8 text-gray-400 text-sm"
+  }, "\u6682\u65E0\u79EF\u5206\u8BB0\u5F55") : /*#__PURE__*/React.createElement("div", {
+    className: "overflow-x-auto"
+  }, /*#__PURE__*/React.createElement("table", {
+    className: "w-full text-sm min-w-[560px]"
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+    className: "text-left text-xs text-gray-400 border-b border-gray-200"
+  }, /*#__PURE__*/React.createElement("th", {
+    className: "py-2 pr-3 font-medium"
+  }, "\u65E5\u671F"), /*#__PURE__*/React.createElement("th", {
+    className: "py-2 pr-3 font-medium"
+  }, "\u7C7B\u578B"), /*#__PURE__*/React.createElement("th", {
+    className: "py-2 pr-3 font-medium"
+  }, "\u79EF\u5206\u53D8\u5316"), /*#__PURE__*/React.createElement("th", {
+    className: "py-2 font-medium"
+  }, "\u8BF4\u660E"))), /*#__PURE__*/React.createElement("tbody", null, memberRecords.map(r => /*#__PURE__*/React.createElement("tr", {
+    key: r.id,
+    className: "border-b border-gray-50 hover:bg-gray-50"
+  }, /*#__PURE__*/React.createElement("td", {
+    className: "py-2.5 pr-3 text-gray-500 whitespace-nowrap"
+  }, r.date), /*#__PURE__*/React.createElement("td", {
+    className: "py-2.5 pr-3"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-xs px-2 py-0.5 rounded-full " + typeBadge(r.type)
+  }, r.type)), /*#__PURE__*/React.createElement("td", {
+    className: "py-2.5 pr-3 font-semibold " + (r.points > 0 ? 'text-green-600' : 'text-orange-600')
+  }, r.points > 0 ? '+' : '', r.points), /*#__PURE__*/React.createElement("td", {
+    className: "py-2.5 text-gray-600"
+  }, r.description)))))));
+}
+
+// ===== 会员管理 =====
+function MembersPage({
+  members,
+  onSaveMember,
+  onDeleteMember,
+  pointsRecords,
+  onAdjustPoints
+}) {
+  const [search, setSearch] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [pointsMember, setPointsMember] = useState(null);
+  const filtered = useMemo(() => {
+    if (!search.trim()) return members;
+    const q = search.trim().toLowerCase();
+    return members.filter(m => m.name.toLowerCase().includes(q) || (m.phone || '').includes(search.trim()));
+  }, [members, search]);
+  const handleAdd = () => {
+    setEditing(null);
+    setShowModal(true);
+  };
+  const handleEdit = m => {
+    setEditing(m);
+    setShowModal(true);
+  };
+  const handleSave = data => {
+    onSaveMember(data);
+    setShowModal(false);
+  };
+  const handleDelete = m => {
+    if (confirm(`确定删除会员"${m.name}"吗？`)) onDeleteMember(m.id);
+  };
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-wrap items-center gap-3 mb-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 min-w-[200px] relative"
+  }, /*#__PURE__*/React.createElement(SearchIcon, {
+    className: "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+  }), /*#__PURE__*/React.createElement("input", {
+    value: search,
+    onChange: e => setSearch(e.target.value),
+    placeholder: "\u641C\u7D22\u4F1A\u5458\u59D3\u540D\u6216\u624B\u673A\u53F7...",
+    className: "w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: handleAdd,
+    className: "px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 whitespace-nowrap"
+  }, /*#__PURE__*/React.createElement(PlusIcon, {
+    className: "w-4 h-4"
+  }), " \u6DFB\u52A0\u4F1A\u5458")), filtered.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl shadow-sm border border-gray-100"
+  }, /*#__PURE__*/React.createElement(EmptyState, {
+    icon: UsersIcon,
+    title: members.length === 0 ? "暂无会员数据" : "未找到匹配会员",
+    hint: members.length === 0 ? "点击「添加会员」开始管理" : "试试其他关键词"
+  })) : /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3"
+  }, filtered.map(m => {
+    const level = getLevel(m.points);
+    return /*#__PURE__*/React.createElement("div", {
+      key: m.id,
+      className: "bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-start justify-between mb-3"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-3"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold"
+    }, m.name.charAt(0)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+      className: "font-semibold text-gray-800"
+    }, m.name), /*#__PURE__*/React.createElement("p", {
+      className: "text-xs text-gray-400"
+    }, m.phone || '无手机号'))), /*#__PURE__*/React.createElement("span", {
+      className: "text-xs px-2 py-1 rounded-full " + level.bg + " " + level.color
+    }, level.name)), /*#__PURE__*/React.createElement("div", {
+      className: "grid grid-cols-3 gap-2 text-sm"
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+      className: "text-gray-400"
+    }, "\u79EF\u5206"), /*#__PURE__*/React.createElement("p", {
+      className: "font-medium text-gray-700"
+    }, m.points || 0)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+      className: "text-gray-400"
+    }, "\u6298\u7B97\u4EF7\u683C"), /*#__PURE__*/React.createElement("p", {
+      className: "font-medium text-blue-600"
+    }, "\xA5", fmt((m.points || 0) * 0.05))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+      className: "text-gray-400"
+    }, "\u6298\u6263"), /*#__PURE__*/React.createElement("p", {
+      className: "font-medium text-gray-700"
+    }, (level.discount * 10).toFixed(1), "\u6298"))), m.birthday && /*#__PURE__*/React.createElement("p", {
+      className: "text-xs text-gray-400 mt-2"
+    }, "\u751F\u65E5\uFF1A", m.birthday), /*#__PURE__*/React.createElement("div", {
+      className: "flex gap-2 mt-3 pt-3 border-t border-gray-100"
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleEdit(m),
+      className: "flex-1 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center gap-1"
+    }, /*#__PURE__*/React.createElement(EditIcon, {
+      className: "w-3.5 h-3.5"
+    }), " \u7F16\u8F91"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => setPointsMember(m),
+      className: "flex-1 py-1.5 text-sm text-amber-600 hover:bg-amber-50 rounded-lg transition-colors flex items-center justify-center gap-1"
+    }, /*#__PURE__*/React.createElement(ReceiptIcon, {
+      className: "w-3.5 h-3.5"
+    }), " \u79EF\u5206"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleDelete(m),
+      className: "flex-1 py-1.5 text-sm text-red-400 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center gap-1"
+    }, /*#__PURE__*/React.createElement(TrashIcon, {
+      className: "w-3.5 h-3.5"
+    }), " \u5220\u9664")));
+  })), showModal && /*#__PURE__*/React.createElement(MemberModal, {
+    member: editing,
+    onSave: handleSave,
+    onClose: () => setShowModal(false)
+  }), pointsMember && /*#__PURE__*/React.createElement(PointsRecordsModal, {
+    member: pointsMember,
+    records: pointsRecords || [],
+    onAdjust: onAdjustPoints,
+    onClose: () => setPointsMember(null)
+  }));
+}
+
+// ===== 营业统计 =====
+function StatsPage({
+  sales,
+  products,
+  onDeleteSale
+}) {
+  const [period, setPeriod] = useState('today');
+  const stats = useMemo(() => {
+    const now = new Date();
+    const today = todayStr();
+    const filtered = sales.filter(s => {
+      if (period === 'today') return s.date === today;
+      if (period === 'week') {
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return new Date(s.date) >= weekAgo;
+      }
+      if (period === 'month') {
+        return s.date.startsWith(now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0'));
+      }
+      return true;
+    });
+    const totalRevenue = filtered.reduce((s, sale) => s + sale.total, 0);
+    const totalCount = filtered.length;
+    const totalItems = filtered.reduce((s, sale) => s + sale.items.reduce((c, i) => c + i.qty, 0), 0);
+    const avgOrder = totalCount > 0 ? totalRevenue / totalCount : 0;
+
+    // 按日期汇总
+    const byDate = {};
+    filtered.forEach(s => {
+      if (!byDate[s.date]) byDate[s.date] = 0;
+      byDate[s.date] += s.total;
+    });
+    const chartData = Object.entries(byDate).sort().map(([date, amount]) => ({
+      date: date.slice(5),
+      amount: Math.round(amount * 100) / 100
+    }));
+
+    // 按分类汇总
+    const byCategory = {};
+    filtered.forEach(s => {
+      s.items.forEach(item => {
+        const product = products.find(p => p.id === item.id);
+        const cat = product ? CATEGORIES.find(c => c.id === product.category)?.name || '其他' : '其他';
+        if (!byCategory[cat]) byCategory[cat] = 0;
+        byCategory[cat] += item.price * item.qty;
+      });
+    });
+    const categoryData = Object.entries(byCategory).map(([name, value]) => ({
+      name,
+      value: Math.round(value * 100) / 100
+    }));
+    return {
+      filtered,
+      totalRevenue,
+      totalCount,
+      totalItems,
+      avgOrder,
+      chartData,
+      categoryData
+    };
+  }, [sales, products, period]);
+  const pieColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2 mb-6"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-lg shadow-sm border border-gray-100 p-1 flex"
+  }, [{
+    k: 'today',
+    n: '今日'
+  }, {
+    k: 'week',
+    n: '本周'
+  }, {
+    k: 'month',
+    n: '本月'
+  }, {
+    k: 'all',
+    n: '全部'
+  }].map(t => /*#__PURE__*/React.createElement("button", {
+    key: t.k,
+    onClick: () => setPeriod(t.k),
+    className: "px-4 py-1.5 rounded-md text-sm transition-colors " + (period === t.k ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100")
+  }, t.n)))), stats.filtered.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl shadow-sm border border-gray-100"
+  }, /*#__PURE__*/React.createElement(EmptyState, {
+    icon: ChartIcon,
+    title: "\u6682\u65E0\u9500\u552E\u6570\u636E",
+    hint: "\u5728\u6536\u94F6\u53F0\u5B8C\u6210\u4E00\u7B14\u4EA4\u6613\u540E\u5373\u53EF\u67E5\u770B\u7EDF\u8BA1"
+  })) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"
+  }, /*#__PURE__*/React.createElement(StatCard, {
+    icon: MoneyIcon,
+    label: "\u8425\u4E1A\u603B\u989D",
+    value: "¥" + fmt(stats.totalRevenue),
+    color: "text-blue-600"
+  }), /*#__PURE__*/React.createElement(StatCard, {
+    icon: ReceiptIcon,
+    label: "\u8BA2\u5355\u6570\u91CF",
+    value: stats.totalCount + " 笔",
+    color: "text-green-600"
+  }), /*#__PURE__*/React.createElement(StatCard, {
+    icon: BoxIcon,
+    label: "\u9500\u552E\u4EF6\u6570",
+    value: stats.totalItems + " 件",
+    color: "text-purple-600"
+  }), /*#__PURE__*/React.createElement(StatCard, {
+    icon: TrendIcon,
+    label: "\u5BA2\u5355\u4EF7",
+    value: "¥" + fmt(stats.avgOrder),
+    color: "text-orange-600"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-5"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-semibold text-gray-700 mb-4"
+  }, "\u8425\u4E1A\u989D\u8D8B\u52BF"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 250
+  }, /*#__PURE__*/React.createElement(LineChart, {
+    data: stats.chartData
+  }, /*#__PURE__*/React.createElement(CartesianGrid, {
+    strokeDasharray: "3 3",
+    stroke: "#f0f0f0"
+  }), /*#__PURE__*/React.createElement(XAxis, {
+    dataKey: "date",
+    tick: {
+      fontSize: 12
+    }
+  }), /*#__PURE__*/React.createElement(YAxis, {
+    tick: {
+      fontSize: 12
+    }
+  }), /*#__PURE__*/React.createElement(Tooltip, {
+    formatter: v => '¥' + fmt(v)
+  }), /*#__PURE__*/React.createElement(Line, {
+    type: "monotone",
+    dataKey: "amount",
+    stroke: "#3b82f6",
+    strokeWidth: 2,
+    name: "\u8425\u4E1A\u989D"
+  })))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-5"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-semibold text-gray-700 mb-4"
+  }, "\u5206\u7C7B\u9500\u552E\u5360\u6BD4"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 250
+  }, /*#__PURE__*/React.createElement(PieChart, null, /*#__PURE__*/React.createElement(Pie, {
+    data: stats.categoryData,
+    dataKey: "value",
+    nameKey: "name",
+    cx: "50%",
+    cy: "50%",
+    outerRadius: 80,
+    label: e => e.name
+  }, stats.categoryData.map((_, i) => /*#__PURE__*/React.createElement(Cell, {
+    key: i,
+    fill: pieColors[i % pieColors.length]
+  }))), /*#__PURE__*/React.createElement(Tooltip, {
+    formatter: v => '¥' + fmt(v)
+  }), /*#__PURE__*/React.createElement(Legend, {
+    wrapperStyle: {
+      fontSize: 12
+    }
+  }))))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "px-5 py-3 border-b border-gray-200"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-semibold text-gray-700"
+  }, "\u4EA4\u6613\u8BB0\u5F55")), /*#__PURE__*/React.createElement("div", {
+    className: "overflow-x-auto"
+  }, /*#__PURE__*/React.createElement("table", {
+    className: "w-full text-sm min-w-[768px]"
+  }, /*#__PURE__*/React.createElement("thead", {
+    className: "bg-gray-50 text-gray-500"
+  }, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
+    className: "px-4 py-3 text-left font-medium"
+  }, "\u65E5\u671F"), /*#__PURE__*/React.createElement("th", {
+    className: "px-4 py-3 text-left font-medium"
+  }, "\u5546\u54C1"), /*#__PURE__*/React.createElement("th", {
+    className: "px-4 py-3 text-left font-medium"
+  }, "\u4F1A\u5458"), /*#__PURE__*/React.createElement("th", {
+    className: "px-4 py-3 text-left font-medium"
+  }, "\u7B49\u7EA7"), /*#__PURE__*/React.createElement("th", {
+    className: "px-4 py-3 text-right font-medium"
+  }, "\u539F\u4EF7"), /*#__PURE__*/React.createElement("th", {
+    className: "px-4 py-3 text-right font-medium"
+  }, "\u5B9E\u4ED8"), /*#__PURE__*/React.createElement("th", {
+    className: "px-4 py-3 text-center font-medium"
+  }, "\u64CD\u4F5C"))), /*#__PURE__*/React.createElement("tbody", null, stats.filtered.slice().reverse().map(sale => /*#__PURE__*/React.createElement("tr", {
+    key: sale.id,
+    className: "border-t border-gray-100 hover:bg-gray-50 transition-colors"
+  }, /*#__PURE__*/React.createElement("td", {
+    className: "px-4 py-3 text-gray-500"
+  }, sale.date), /*#__PURE__*/React.createElement("td", {
+    className: "px-4 py-3 text-gray-700"
+  }, sale.items.map(i => `${i.name}×${i.qty}`).join('，')), /*#__PURE__*/React.createElement("td", {
+    className: "px-4 py-3 text-gray-600"
+  }, sale.memberName || '散客'), /*#__PURE__*/React.createElement("td", {
+    className: "px-4 py-3 text-gray-500"
+  }, sale.levelName || '-'), /*#__PURE__*/React.createElement("td", {
+    className: "px-4 py-3 text-right text-gray-400 line-through"
+  }, "\xA5", fmt(sale.subtotal)), /*#__PURE__*/React.createElement("td", {
+    className: "px-4 py-3 text-right text-blue-600 font-medium"
+  }, "\xA5", fmt(sale.total)), /*#__PURE__*/React.createElement("td", {
+    className: "px-4 py-3 text-center"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (confirm(`确定退货吗？\n\n商品：${sale.items.map(i => `${i.name}×${i.qty}`).join('，')}\n退款：¥${fmt(sale.total)}\n\n退货后库存将恢复，会员积分将扣减。`)) {
+        onDeleteSale(sale.id);
+      }
+    },
+    className: "text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs inline-flex items-center gap-1"
+  }, /*#__PURE__*/React.createElement(ReceiptIcon, {
+    className: "w-3.5 h-3.5"
+  }), " \u9000\u8D27"))))))))));
+}
+
+// ===== IndexedDB 持久化存储 =====
+const DB_NAME = 'cosmetics_store';
+const DB_VERSION = 1;
+const DB_STORES = ['products', 'members', 'sales', 'pointsRecords'];
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      DB_STORES.forEach(s => {
+        if (!db.objectStoreNames.contains(s)) {
+          db.createObjectStore(s, {
+            keyPath: 'id'
+          });
+        }
+      });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbGetAll(storeName) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readonly');
+    const req = tx.objectStore(storeName).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbPutAll(storeName, items) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    store.clear();
+    items.forEach(item => store.put(item));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// 请求永久存储（防止浏览器自动清理）
+async function requestPersistentStorage() {
+  if (navigator.storage && navigator.storage.persist) {
+    try {
+      const isPersisted = await navigator.storage.persisted();
+      if (!isPersisted) {
+        await navigator.storage.persist();
+      }
+    } catch (e) {/* 部分浏览器不支持，忽略 */}
+  }
+}
+
+// ===== SQLite 导出/导入 =====
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector('script[src="' + src + '"]')) return resolve();
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('加载失败: ' + src));
+    document.head.appendChild(s);
+  });
+}
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+const SQL_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js';
+const SQL_JS_WASM = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/';
+async function ensureSqlJs() {
+  await loadScript(SQL_JS_CDN);
+  const SQL = await window.initSqlJs({
+    locateFile: f => SQL_JS_WASM + f
+  });
+  return SQL;
+}
+async function exportToSQLite(products, members, sales, pointsRecords) {
+  const SQL = await ensureSqlJs();
+  const db = new SQL.Database();
+  db.run(`CREATE TABLE products (id TEXT PRIMARY KEY, name TEXT, barcode TEXT, brand TEXT, category TEXT, price REAL, stock INTEGER, cost REAL, sku TEXT, createdAt TEXT)`);
+  db.run(`CREATE TABLE members (id TEXT PRIMARY KEY, name TEXT, phone TEXT, birthday TEXT, address TEXT, points INTEGER, createdAt TEXT)`);
+  db.run(`CREATE TABLE sales (id TEXT PRIMARY KEY, date TEXT, createdAt TEXT, itemsJson TEXT, subtotal REAL, total REAL, memberId TEXT, memberName TEXT, levelName TEXT)`);
+  db.run(`CREATE TABLE points_records (id TEXT PRIMARY KEY, memberId TEXT, memberName TEXT, points INTEGER, type TEXT, description TEXT, date TEXT, createdAt TEXT)`);
+  products.forEach(p => {
+    db.run('INSERT INTO products VALUES (?,?,?,?,?,?,?,?,?,?)', [p.id, p.name, p.barcode, p.brand, p.category, p.price, p.stock, p.cost, p.sku, p.createdAt]);
+  });
+  members.forEach(m => {
+    db.run('INSERT INTO members VALUES (?,?,?,?,?,?,?)', [m.id, m.name, m.phone, m.birthday, m.address, m.points, m.createdAt]);
+  });
+  sales.forEach(s => {
+    db.run('INSERT INTO sales VALUES (?,?,?,?,?,?,?,?)', [s.id, s.date, s.createdAt, JSON.stringify(s.items), s.subtotal, s.total, s.memberId, s.memberName, s.levelName]);
+  });
+  pointsRecords.forEach(r => {
+    db.run('INSERT INTO points_records VALUES (?,?,?,?,?,?,?,?)', [r.id, r.memberId, r.memberName, r.points, r.type, r.description, r.date, r.createdAt]);
+  });
+  const data = db.export();
+  db.close();
+  return new Blob([data], {
+    type: 'application/x-sqlite3'
+  });
+}
+async function importFromSQLite(file) {
+  const SQL = await ensureSqlJs();
+  const buf = await file.arrayBuffer();
+  const db = new SQL.Database(new Uint8Array(buf));
+  const products = [];
+  db.exec('SELECT * FROM products')[0]?.values.forEach(row => {
+    products.push({
+      id: row[0],
+      name: row[1],
+      barcode: row[2],
+      brand: row[3],
+      category: row[4],
+      price: row[5],
+      stock: row[6],
+      cost: row[7],
+      sku: row[8],
+      createdAt: row[9]
+    });
+  });
+  const members = [];
+  db.exec('SELECT * FROM members')[0]?.values.forEach(row => {
+    members.push({
+      id: row[0],
+      name: row[1],
+      phone: row[2],
+      birthday: row[3],
+      address: row[4],
+      points: row[5],
+      createdAt: row[6]
+    });
+  });
+  const sales = [];
+  db.exec('SELECT * FROM sales')[0]?.values.forEach(row => {
+    sales.push({
+      id: row[0],
+      date: row[1],
+      createdAt: row[2],
+      items: JSON.parse(row[3] || '[]'),
+      subtotal: row[4],
+      total: row[5],
+      memberId: row[6],
+      memberName: row[7],
+      levelName: row[8]
+    });
+  });
+  const pointsRecords = [];
+  db.exec('SELECT * FROM points_records')[0]?.values.forEach(row => {
+    pointsRecords.push({
+      id: row[0],
+      memberId: row[1],
+      memberName: row[2],
+      points: row[3],
+      type: row[4],
+      description: row[5],
+      date: row[6],
+      createdAt: row[7]
+    });
+  });
+  db.close();
+  return {
+    products,
+    members,
+    sales,
+    pointsRecords
+  };
+}
+
+// ===== 自动备份（File System Access API）=====
+const META_DB = 'cosmetics_meta';
+const META_STORE = 'kv';
+function openMetaDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(META_DB, 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(META_STORE)) {
+        db.createObjectStore(META_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function metaGet(key) {
+  const db = await openMetaDB();
+  return new Promise(resolve => {
+    const tx = db.transaction(META_STORE, 'readonly');
+    const req = tx.objectStore(META_STORE).get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => resolve(null);
+  });
+}
+async function metaSet(key, value) {
+  const db = await openMetaDB();
+  return new Promise(resolve => {
+    const tx = db.transaction(META_STORE, 'readwrite');
+    tx.objectStore(META_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => resolve();
+  });
+}
+async function verifyDirPermission(handle) {
+  if (!handle) return false;
+  try {
+    if ((await handle.queryPermission({
+      mode: 'readwrite'
+    })) === 'granted') return true;
+    // 需要用户手势才能 requestPermission，这里只查询不请求
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+async function requestDirPermission(handle) {
+  if (!handle) return false;
+  try {
+    return (await handle.requestPermission({
+      mode: 'readwrite'
+    })) === 'granted';
+  } catch (e) {
+    return false;
+  }
+}
+async function pickBackupDir() {
+  if (!window.showDirectoryPicker) {
+    throw new Error('当前浏览器不支持文件夹选择，请使用 Chrome 或 Edge');
+  }
+  const handle = await window.showDirectoryPicker({
+    mode: 'readwrite'
+  });
+  await metaSet('backupDirHandle', handle);
+  return handle;
+}
+async function getBackupDirHandle() {
+  return await metaGet('backupDirHandle');
+}
+async function writeBackupFile(handle, products, members, sales, pointsRecords) {
+  const blob = await exportToSQLite(products, members, sales, pointsRecords);
+  const now = new Date();
+  const ts = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
+  const filename = `美妆门店备份_${ts}.sqlite`;
+  const fileHandle = await handle.getFileHandle(filename, {
+    create: true
+  });
+  const writable = await fileHandle.createWritable();
+  await writable.write(blob);
+  await writable.close();
+  await metaSet('lastBackupTime', now.toISOString());
+  return filename;
+}
+
+// ===== 主组件 =====
+function App() {
+  const [tab, setTab] = useState('pos');
+  const [products, setProducts] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [sales, setSales] = useState([]);
+  const [pointsRecords, setPointsRecords] = useState([]);
+  const [toast, setToast] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [dbBusy, setDbBusy] = useState(false);
+  const [backupDirName, setBackupDirName] = useState('');
+  const [lastBackupTime, setLastBackupTime] = useState('');
+  const [backingUp, setBackingUp] = useState(false);
+
+  // 初始化：从 IndexedDB 加载数据 + 请求永久存储
+  useEffect(() => {
+    let done = false;
+    const finish = () => {
+      if (!done) {
+        done = true;
+        setLoading(false);
+      }
+    };
+    const timer = setTimeout(finish, 3000); // 安全兜底：3秒后强制完成
+    (async () => {
+      await requestPersistentStorage();
+      try {
+        const [p, m, s, r] = await Promise.all([dbGetAll('products'), dbGetAll('members'), dbGetAll('sales'), dbGetAll('pointsRecords')]);
+        setProducts(p);
+        setMembers(m);
+        setSales(s);
+        setPointsRecords(r);
+      } catch (e) {
+        console.error('加载数据失败', e);
+      }
+      clearTimeout(timer);
+      finish();
+    })();
+    return () => clearTimeout(timer);
+  }, []);
+
+  // 加载备份设置 + 自动备份
+  useEffect(() => {
+    if (loading) return;
+    (async () => {
+      try {
+        const handle = await getBackupDirHandle();
+        if (handle) {
+          setBackupDirName(handle.name || '已设置');
+          const lastTime = await metaGet('lastBackupTime');
+          if (lastTime) setLastBackupTime(lastTime);
+          // 检查今天是否已备份
+          const now = new Date();
+          const last = lastTime ? new Date(lastTime) : null;
+          const todayMatch = last && last.getFullYear() === now.getFullYear() && last.getMonth() === now.getMonth() && last.getDate() === now.getDate();
+          if (!todayMatch) {
+            const ok = await verifyDirPermission(handle);
+            if (ok) {
+              try {
+                setBackingUp(true);
+                const filename = await writeBackupFile(handle, products, members, sales, pointsRecords);
+                setLastBackupTime(now.toISOString());
+                setBackingUp(false);
+                console.log('自动备份完成:', filename);
+              } catch (e) {
+                setBackingUp(false);
+                console.warn('自动备份失败:', e);
+              }
+            }
+          }
+        }
+      } catch (e) {/* 忽略 */}
+    })();
+  }, [loading]);
+
+  // 选择备份目录
+  const handlePickBackupDir = async () => {
+    try {
+      const handle = await pickBackupDir();
+      setBackupDirName(handle.name || '已设置');
+      showToast('备份目录已设置: ' + (handle.name || ''));
+    } catch (e) {
+      if (e.name !== 'AbortError') showToast('设置失败: ' + e.message);
+    }
+  };
+
+  // 立即备份
+  const handleBackupNow = async () => {
+    try {
+      const handle = await getBackupDirHandle();
+      if (!handle) {
+        showToast('请先选择备份目录');
+        return;
+      }
+      const ok = await verifyDirPermission(handle);
+      if (!ok) {
+        const granted = await requestDirPermission(handle);
+        if (!granted) {
+          showToast('需要文件夹访问权限');
+          return;
+        }
+      }
+      setBackingUp(true);
+      const filename = await writeBackupFile(handle, products, members, sales, pointsRecords);
+      setLastBackupTime(new Date().toISOString());
+      setBackingUp(false);
+      showToast('备份完成: ' + filename);
+    } catch (e) {
+      setBackingUp(false);
+      showToast('备份失败: ' + e.message);
+    }
+  };
+
+  // 持久化：数据变化时自动保存到 IndexedDB
+  const saveToDB = useCallback((storeName, items) => {
+    setDbBusy(true);
+    dbPutAll(storeName, items).catch(e => console.error('保存失败:', storeName, e)).finally(() => setDbBusy(false));
+  }, []);
+  useEffect(() => {
+    if (!loading) saveToDB('products', products);
+  }, [products, loading, saveToDB]);
+  useEffect(() => {
+    if (!loading) saveToDB('members', members);
+  }, [members, loading, saveToDB]);
+  useEffect(() => {
+    if (!loading) saveToDB('sales', sales);
+  }, [sales, loading, saveToDB]);
+  useEffect(() => {
+    if (!loading) saveToDB('pointsRecords', pointsRecords);
+  }, [pointsRecords, loading, saveToDB]);
+
+  // SQLite 导出
+  const handleExportDB = async () => {
+    try {
+      setToast('正在生成数据库文件...');
+      const blob = await exportToSQLite(products, members, sales, pointsRecords);
+      downloadBlob(blob, `美妆门店_${todayStr()}.sqlite`);
+      setToast(null);
+      showToast('数据库已导出');
+    } catch (e) {
+      setToast(null);
+      showToast('导出失败: ' + e.message);
+    }
+  };
+
+  // SQLite 导入
+  const fileRef = useRef(null);
+  const handleImportDB = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      setToast('正在导入数据库...');
+      const data = await importFromSQLite(file);
+      setProducts(data.products || []);
+      setMembers(data.members || []);
+      setSales(data.sales || []);
+      setPointsRecords(data.pointsRecords || []);
+      setToast(null);
+      showToast(`导入成功: ${data.products.length} 商品, ${data.members.length} 会员, ${data.sales.length} 订单`);
+    } catch (err) {
+      setToast(null);
+      showToast('导入失败: ' + err.message);
+    }
+    e.target.value = '';
+  };
+  const showToast = msg => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  // 商品操作
+  const saveProduct = data => {
+    setProducts(ps => {
+      const idx = ps.findIndex(p => p.id === data.id);
+      if (idx >= 0) {
+        const updated = [...ps];
+        updated[idx] = data;
+        showToast('商品已更新');
+        return updated;
+      }
+      showToast('商品已添加');
+      return [...ps, data];
+    });
+  };
+  const deleteProduct = id => {
+    setProducts(ps => ps.filter(p => p.id !== id));
+    showToast('商品已删除');
+  };
+  const importProducts = items => {
+    setProducts(ps => [...ps, ...items]);
+    showToast(`成功导入 ${items.length} 条商品`);
+  };
+
+  // 会员操作
+  const saveMember = data => {
+    setMembers(ms => {
+      const idx = ms.findIndex(m => m.id === data.id);
+      if (idx >= 0) {
+        const updated = [...ms];
+        updated[idx] = data;
+        showToast('会员已更新');
+        return updated;
+      }
+      showToast('会员已添加');
+      return [...ms, data];
+    });
+  };
+  const deleteMember = id => {
+    setMembers(ms => ms.filter(m => m.id !== id));
+    showToast('会员已删除');
+  };
+
+  // 结账
+  const handleCheckout = sale => {
+    const saleRecord = {
+      ...sale,
+      id: uid(),
+      date: todayStr(),
+      createdAt: new Date().toISOString()
+    };
+    setSales(s => [...s, saleRecord]);
+    // 扣库存
+    setProducts(ps => ps.map(p => {
+      const item = sale.items.find(i => i.id === p.id);
+      if (item) return {
+        ...p,
+        stock: Math.max(0, (p.stock || 0) - item.qty)
+      };
+      return p;
+    }));
+    // 加积分 + 积分记录
+    if (sale.memberId) {
+      setMembers(ms => ms.map(m => {
+        if (m.id !== sale.memberId) return m;
+        const points = (m.points || 0) + Math.floor(sale.total);
+        return {
+          ...m,
+          points
+        };
+      }));
+      setPointsRecords(rs => [...rs, {
+        id: uid(),
+        memberId: sale.memberId,
+        memberName: sale.memberName || '',
+        points: Math.floor(sale.total),
+        type: '购买积分',
+        description: `购物消费 ¥${fmt(sale.total)}（${sale.items.map(i => i.name + '×' + i.qty).join('，')}）`,
+        date: todayStr(),
+        createdAt: new Date().toISOString()
+      }]);
+    }
+    showToast(`结账成功 ¥${fmt(sale.total)}`);
+  };
+
+  // 退货：删除销售记录、恢复库存、扣除积分
+  const deleteSale = saleId => {
+    setSales(ss => {
+      const sale = ss.find(s => s.id === saleId);
+      if (!sale) return ss;
+      // 恢复商品库存
+      setProducts(ps => ps.map(p => {
+        const item = sale.items.find(i => i.id === p.id);
+        if (item) return {
+          ...p,
+          stock: (p.stock || 0) + item.qty
+        };
+        return p;
+      }));
+      // 扣除会员积分 + 积分记录
+      if (sale.memberId) {
+        setMembers(ms => ms.map(m => {
+          if (m.id !== sale.memberId) return m;
+          const points = Math.max(0, (m.points || 0) - Math.floor(sale.total));
+          return {
+            ...m,
+            points
+          };
+        }));
+        setPointsRecords(rs => [...rs, {
+          id: uid(),
+          memberId: sale.memberId,
+          memberName: sale.memberName || '',
+          points: -Math.floor(sale.total),
+          type: '退货扣减',
+          description: `退货退款 ¥${fmt(sale.total)}（${sale.items.map(i => i.name + '×' + i.qty).join('，')}）`,
+          date: todayStr(),
+          createdAt: new Date().toISOString()
+        }]);
+      }
+      showToast(`退货成功，已恢复库存，退款 ¥${fmt(sale.total)}`);
+      return ss.filter(s => s.id !== saleId);
+    });
+  };
+
+  // 手动调整积分
+  const handleAdjustPoints = record => {
+    setPointsRecords(rs => [...rs, record]);
+    setMembers(ms => ms.map(m => {
+      if (m.id !== record.memberId) return m;
+      const points = Math.max(0, (m.points || 0) + record.points);
+      return {
+        ...m,
+        points
+      };
+    }));
+    showToast(`积分已${record.points > 0 ? '增加' : '扣减'} ${Math.abs(record.points)}`);
+  };
+  const ActiveIcon = NAV_TABS.find(t => t.id === tab)?.icon || CartIcon;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "min-h-screen bg-gray-50"
+  }, /*#__PURE__*/React.createElement("header", {
+    className: "bg-white border-b border-gray-200 sticky top-0 z-30"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center h-14 lg:h-16"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2 mr-2 sm:mr-4 lg:mr-8 flex-shrink-0"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "w-8 h-8 rounded-lg bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center"
+  }, /*#__PURE__*/React.createElement(TagIcon, {
+    className: "w-5 h-5 text-white"
+  })), /*#__PURE__*/React.createElement("span", {
+    className: "text-base sm:text-lg font-bold text-gray-800 hidden sm:inline"
+  }, "\u7F8E\u5986\u95E8\u5E97\u7BA1\u7406\u7CFB\u7EDF"), /*#__PURE__*/React.createElement("span", {
+    className: "text-base font-bold text-gray-800 sm:hidden"
+  }, "\u7F8E\u5986\u95E8\u5E97")), /*#__PURE__*/React.createElement("nav", {
+    className: "flex gap-1 overflow-x-auto flex-1"
+  }, NAV_TABS.map(t => {
+    const TabIcon = t.icon;
+    return /*#__PURE__*/React.createElement("button", {
+      key: t.id,
+      onClick: () => setTab(t.id),
+      className: "flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap " + (tab === t.id ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100")
+    }, /*#__PURE__*/React.createElement(TabIcon, {
+      className: "w-4 h-4"
+    }), " ", /*#__PURE__*/React.createElement("span", {
+      className: "hidden sm:inline"
+    }, t.name));
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-1.5 ml-2 flex-shrink-0"
+  }, dbBusy && /*#__PURE__*/React.createElement("span", {
+    className: "w-2 h-2 rounded-full bg-green-400 animate-pulse",
+    title: "\u6B63\u5728\u4FDD\u5B58..."
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: handleExportDB,
+    className: "flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap",
+    title: "\u5BFC\u51FA SQLite \u6570\u636E\u5E93\u6587\u4EF6"
+  }, /*#__PURE__*/React.createElement(DownloadIcon, {
+    className: "w-3.5 h-3.5"
+  }), " ", /*#__PURE__*/React.createElement("span", {
+    className: "hidden lg:inline"
+  }, "\u5BFC\u51FA")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => fileRef.current && fileRef.current.click(),
+    className: "flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap",
+    title: "\u4ECE SQLite \u6587\u4EF6\u5BFC\u5165\u6570\u636E"
+  }, /*#__PURE__*/React.createElement(UploadIcon, {
+    className: "w-3.5 h-3.5"
+  }), " ", /*#__PURE__*/React.createElement("span", {
+    className: "hidden lg:inline"
+  }, "\u5BFC\u5165")), /*#__PURE__*/React.createElement("input", {
+    ref: fileRef,
+    type: "file",
+    accept: ".sqlite,.db,application/x-sqlite3",
+    onChange: handleImportDB,
+    className: "hidden"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "w-px h-5 bg-gray-200 mx-0.5 hidden lg:block"
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: handlePickBackupDir,
+    className: "flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm border rounded-lg transition-colors whitespace-nowrap " + (backupDirName ? "text-green-700 border-green-300 hover:bg-green-50" : "text-gray-600 border-gray-300 hover:bg-gray-50"),
+    title: backupDirName ? "备份目录: " + backupDirName : "选择自动备份目录"
+  }, /*#__PURE__*/React.createElement(BoxIcon, {
+    className: "w-3.5 h-3.5"
+  }), " ", /*#__PURE__*/React.createElement("span", {
+    className: "hidden lg:inline"
+  }, backupDirName ? '备份✓' : '备份')), backupDirName && /*#__PURE__*/React.createElement("button", {
+    onClick: handleBackupNow,
+    disabled: backingUp,
+    className: "flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors whitespace-nowrap disabled:opacity-50",
+    title: lastBackupTime ? "上次备份: " + new Date(lastBackupTime).toLocaleString('zh-CN') : "立即备份到已设目录"
+  }, backingUp ? /*#__PURE__*/React.createElement("span", {
+    className: "w-3.5 h-3.5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"
+  }) : /*#__PURE__*/React.createElement(DownloadIcon, {
+    className: "w-3.5 h-3.5"
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "hidden lg:inline"
+  }, "\u5907\u4EFD"))))), /*#__PURE__*/React.createElement("main", {
+    className: "max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-6"
+  }, loading ? /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col items-center justify-center py-20 text-gray-400"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "w-10 h-10 border-[3px] border-gray-200 border-t-blue-500 rounded-full animate-spin mb-3"
+  }), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm"
+  }, "\u6B63\u5728\u52A0\u8F7D\u6570\u636E\u5E93...")) : /*#__PURE__*/React.createElement(React.Fragment, null, tab === 'pos' && /*#__PURE__*/React.createElement(DashboardPage, {
+    products: products,
+    members: members,
+    onCheckout: handleCheckout
+  }), tab === 'products' && /*#__PURE__*/React.createElement(ProductsPage, {
+    products: products,
+    onSaveProduct: saveProduct,
+    onDeleteProduct: deleteProduct,
+    onImport: importProducts
+  }), tab === 'members' && /*#__PURE__*/React.createElement(MembersPage, {
+    members: members,
+    onSaveMember: saveMember,
+    onDeleteMember: deleteMember,
+    pointsRecords: pointsRecords,
+    onAdjustPoints: handleAdjustPoints
+  }), tab === 'stats' && /*#__PURE__*/React.createElement(StatsPage, {
+    sales: sales,
+    products: products,
+    onDeleteSale: deleteSale
+  }))), toast && /*#__PURE__*/React.createElement("div", {
+    className: "fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg z-50 text-sm"
+  }, toast));
+}
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(/*#__PURE__*/React.createElement(App, null));
+</script>
+</body>
+</html>
