@@ -243,7 +243,7 @@ function ScanModal({ onScan, onClose }) {
 // ===== 商品弹窗 =====
 function ProductModal({ product, onSave, onClose }) {
   const [form, setForm] = useState(() => ({
-    name: '', brand: '', category: 'skincare', price: '', stock: '', barcode: '', description: '',
+    name: '', brand: '', category: 'skincare', price: '', cost: '', stock: '', barcode: '', description: '',
     ...(product || {}),
   }));
   const [showScan, setShowScan] = useState(false);
@@ -254,6 +254,7 @@ function ProductModal({ product, onSave, onClose }) {
     const data = {
       ...form,
       price: parseFloat(form.price) || 0,
+      cost: parseFloat(form.cost) || 0,
       stock: parseInt(form.stock) || 0,
       category: form.category || 'other',
     };
@@ -298,10 +299,16 @@ function ProductModal({ product, onSave, onClose }) {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
         </Field>
       </div>
-      <Field label="库存数量">
-        <input type="number" min="0" value={form.stock} onChange={e => update('stock', e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
-      </Field>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field label="成本价（元）">
+          <input type="number" min="0" step="0.01" value={form.cost} onChange={e => update('cost', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
+        </Field>
+        <Field label="库存数量">
+          <input type="number" min="0" value={form.stock} onChange={e => update('stock', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
+        </Field>
+      </div>
       <Field label="描述">
         <textarea value={form.description || ''} onChange={e => update('description', e.target.value)} rows={2}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="商品描述（选填）" />
@@ -320,7 +327,7 @@ function ImportModal({ onImport, onClose }) {
 
   const downloadTemplate = () => {
     const template = [
-      { 商品名称: '示例商品', 品牌: '示例品牌', 分类: '护肤', 单价: 99.00, 库存: 100, 条码: '6900000000000', 描述: '商品描述' }
+      { 商品名称: '示例商品', 品牌: '示例品牌', 分类: '护肤', 单价: 99.00, 成本价: 50.00, 库存: 100, 条码: '6900000000000', 描述: '商品描述' }
     ];
     const ws = XLSX.utils.json_to_sheet(template);
     const wb = XLSX.utils.book_new();
@@ -348,6 +355,7 @@ function ImportModal({ onImport, onClose }) {
             return found ? found.id : 'other';
           })(),
           price: parseFloat(row['单价'] || row['价格'] || row['price'] || 0) || 0,
+          cost: parseFloat(row['成本价'] || row['成本'] || row['cost'] || 0) || 0,
           stock: parseInt(row['库存'] || row['数量'] || row['stock'] || 0) || 0,
           barcode: String(row['条码'] || row['barcode'] || ''),
           description: row['描述'] || row['说明'] || row['description'] || '',
@@ -402,6 +410,7 @@ function ImportModal({ onImport, onClose }) {
                   <th className="px-3 py-2 text-left">名称</th>
                   <th className="px-3 py-2 text-left">品牌</th>
                   <th className="px-3 py-2 text-right">单价</th>
+                  <th className="px-3 py-2 text-right">成本价</th>
                   <th className="px-3 py-2 text-right">库存</th>
                 </tr>
               </thead>
@@ -411,6 +420,7 @@ function ImportModal({ onImport, onClose }) {
                     <td className="px-3 py-2">{item.name}</td>
                     <td className="px-3 py-2 text-gray-500">{item.brand || '-'}</td>
                     <td className="px-3 py-2 text-right">¥{fmt(item.price)}</td>
+                    <td className="px-3 py-2 text-right">¥{fmt(item.cost || 0)}</td>
                     <td className="px-3 py-2 text-right">{item.stock}</td>
                   </tr>
                 ))}
@@ -433,6 +443,8 @@ function DashboardPage({ products, members, onCheckout }) {
   const [searching, setSearching] = useState(false);
   const [showScan, setShowScan] = useState(false);
   const [scanHint, setScanHint] = useState('');
+  const [editingTotal, setEditingTotal] = useState(false);
+  const [customTotal, setCustomTotal] = useState('');
   const barcodeRef = useRef(null);
 
   const filtered = useMemo(() => {
@@ -449,7 +461,8 @@ function DashboardPage({ products, members, onCheckout }) {
   const member = members.find(m => m.id === memberId);
   const level = member ? getLevel(member.points) : MEMBER_LEVELS[0];
   const discount = level.discount;
-  const finalTotal = cartTotal * discount;
+  const calculatedTotal = cartTotal * discount;
+  const finalTotal = editingTotal && customTotal !== '' ? (parseFloat(customTotal) || 0) : calculatedTotal;
 
   const addToCart = (product) => {
     setCart(c => {
@@ -520,6 +533,8 @@ function DashboardPage({ products, members, onCheckout }) {
     });
     setCart([]);
     setMemberId('');
+    setEditingTotal(false);
+    setCustomTotal('');
   };
 
   const filteredMembers = useMemo(() => {
@@ -703,13 +718,32 @@ function DashboardPage({ products, members, onCheckout }) {
             {discount < 1.0 && (
               <div className="flex justify-between text-sm text-gray-500">
                 <span>会员折扣 ({level.name} {(1 - discount) * 100}%off)</span>
-                <span>-¥{fmt(cartTotal - finalTotal)}</span>
+                <span>-¥{fmt(cartTotal - calculatedTotal)}</span>
               </div>
             )}
-            <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-              <span className="font-semibold text-gray-700">合计</span>
-              <span className="text-xl font-bold text-blue-600">¥{fmt(finalTotal)}</span>
-            </div>
+            {editingTotal ? (
+              <div className="flex items-center gap-2 pt-1">
+                <span className="text-sm text-gray-500 whitespace-nowrap">实收</span>
+                <span className="text-sm text-gray-400">¥</span>
+                <input type="number" min="0" step="0.01" value={customTotal}
+                  onChange={e => setCustomTotal(e.target.value)}
+                  className="flex-1 px-2 py-1 border border-blue-400 rounded text-right text-lg font-bold text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00" autoFocus />
+                <button onClick={() => { setEditingTotal(false); setCustomTotal(''); }}
+                  className="text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap">取消</button>
+              </div>
+            ) : (
+              <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-gray-700">合计</span>
+                  <button onClick={() => { setEditingTotal(true); setCustomTotal(String(calculatedTotal.toFixed(2))); }}
+                    className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-0.5" title="修改实收金额">
+                    <EditIcon className="w-3 h-3" /> 改价
+                  </button>
+                </div>
+                <span className="text-xl font-bold text-blue-600">¥{fmt(finalTotal)}</span>
+              </div>
+            )}
             <button onClick={checkout}
               className="w-full py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 font-medium">
               <CheckIcon className="w-4 h-4" /> 结账
@@ -836,13 +870,15 @@ function ProductsPage({ products, onSaveProduct, onDeleteProduct, onImport }) {
             hint={products.length === 0 ? "点击「添加商品」或「导入」开始管理" : "试试其他关键词"} />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm min-w-[800px]">
               <thead className="bg-gray-50 text-gray-500">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium">商品名称</th>
                   <th className="px-4 py-3 text-left font-medium">品牌</th>
                   <th className="px-4 py-3 text-left font-medium">分类</th>
                   <th className="px-4 py-3 text-right font-medium">单价</th>
+                  <th className="px-4 py-3 text-right font-medium">成本价</th>
+                  <th className="px-4 py-3 text-right font-medium">利润</th>
                   <th className="px-4 py-3 text-right font-medium">库存</th>
                   <th className="px-4 py-3 text-center font-medium">操作</th>
                 </tr>
@@ -856,6 +892,14 @@ function ProductsPage({ products, onSaveProduct, onDeleteProduct, onImport }) {
                       <td className="px-4 py-3 text-gray-500">{p.brand || '-'}</td>
                       <td className="px-4 py-3 text-gray-500">{cat ? cat.name : '-'}</td>
                       <td className="px-4 py-3 text-right text-blue-600 font-medium">¥{fmt(p.price)}</td>
+                      <td className="px-4 py-3 text-right text-gray-500">¥{fmt(p.cost || 0)}</td>
+                      <td className="px-4 py-3 text-right">
+                        {(() => {
+                          const profit = (p.price || 0) - (p.cost || 0);
+                          const cls = profit < 0 ? 'text-red-500 font-medium' : 'text-green-600';
+                          return <span className={cls}>¥{fmt(profit)}</span>;
+                        })()}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <span className={(p.stock || 0) < 10 ? 'text-red-500 font-medium' : 'text-gray-600'}>{p.stock || 0}</span>
                       </td>
@@ -1734,6 +1778,7 @@ function App() {
         '分类': getCategoryName(p.category),
         '售价': p.price || 0,
         '成本价': p.cost || 0,
+        '利润': (p.price || 0) - (p.cost || 0),
         '库存': p.stock || 0,
         '条码': p.barcode || '',
         '单位': p.unit || '',
