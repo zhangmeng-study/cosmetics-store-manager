@@ -443,6 +443,9 @@ function DashboardPage({ products, members, onCheckout }) {
   const [scanHint, setScanHint] = useState('');
   const [editingTotal, setEditingTotal] = useState(false);
   const [customTotal, setCustomTotal] = useState('');
+  const [editingDiscount, setEditingDiscount] = useState(false);
+  const [customDiscount, setCustomDiscount] = useState('');
+  const [receivedAmount, setReceivedAmount] = useState('');
   const barcodeRef = useRef(null);
 
   const filtered = useMemo(() => {
@@ -458,9 +461,10 @@ function DashboardPage({ products, members, onCheckout }) {
   const cartTotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.qty, 0), [cart]);
   const member = members.find(m => m.id === memberId);
   const level = member ? getLevel(member.points) : MEMBER_LEVELS[0];
-  const discount = level.discount;
+  const discount = editingDiscount && customDiscount !== '' ? (parseFloat(customDiscount) || 1) : level.discount;
   const calculatedTotal = cartTotal * discount;
   const finalTotal = editingTotal && customTotal !== '' ? (parseFloat(customTotal) || 0) : calculatedTotal;
+  const change = receivedAmount ? Math.max(0, (parseFloat(receivedAmount) || 0) - finalTotal) : 0;
 
   const addToCart = (product) => {
     setCart(c => {
@@ -533,6 +537,9 @@ function DashboardPage({ products, members, onCheckout }) {
     setMemberId('');
     setEditingTotal(false);
     setCustomTotal('');
+    setEditingDiscount(false);
+    setCustomDiscount('');
+    setReceivedAmount('');
   };
 
   const filteredMembers = useMemo(() => {
@@ -713,10 +720,28 @@ function DashboardPage({ products, members, onCheckout }) {
             <div className="flex justify-between text-sm text-gray-500">
               <span>小计</span><span>¥{fmt(cartTotal)}</span>
             </div>
-            {discount < 1.0 && (
-              <div className="flex justify-between text-sm text-gray-500">
-                <span>会员折扣 ({level.name} {(1 - discount) * 100}%off)</span>
-                <span>-¥{fmt(cartTotal - calculatedTotal)}</span>
+            {editingDiscount ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500 whitespace-nowrap">折扣</span>
+                <input type="number" min="0.01" max="1" step="0.01" value={customDiscount}
+                  onChange={e => setCustomDiscount(e.target.value)}
+                  className="w-20 px-2 py-1 border border-orange-400 rounded text-right text-sm font-medium text-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  placeholder="0.85" autoFocus />
+                <span className="text-xs text-gray-400">如 0.85 表示85折</span>
+                <button onClick={() => { setEditingDiscount(false); setCustomDiscount(''); }}
+                  className="text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap">取消</button>
+              </div>
+            ) : (
+              <div className="flex justify-between items-center text-sm text-gray-500">
+                <div className="flex items-center gap-1.5">
+                  <span>折扣</span>
+                  {discount < 1.0 && <span className="text-xs text-orange-500">({level.name} {(1 - discount) * 100}%off)</span>}
+                  <button onClick={() => { setEditingDiscount(true); setCustomDiscount(String(discount)); }}
+                    className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-0.5" title="修改折扣">
+                    <EditIcon className="w-3 h-3" />
+                  </button>
+                </div>
+                <span>{discount < 1.0 ? `-¥${fmt(cartTotal - calculatedTotal)}` : '无折扣'}</span>
               </div>
             )}
             {editingTotal ? (
@@ -740,6 +765,26 @@ function DashboardPage({ products, members, onCheckout }) {
                   </button>
                 </div>
                 <span className="text-xl font-bold text-blue-600">¥{fmt(finalTotal)}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2 pt-1">
+              <span className="text-sm text-gray-500 whitespace-nowrap">收款</span>
+              <span className="text-sm text-gray-400">¥</span>
+              <input type="number" min="0" step="0.01" value={receivedAmount}
+                onChange={e => setReceivedAmount(e.target.value)}
+                className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="输入收款金额" />
+            </div>
+            {receivedAmount && parseFloat(receivedAmount) >= finalTotal && (
+              <div className="flex justify-between items-center text-sm pt-1 border-t border-dashed border-gray-200">
+                <span className="text-gray-500">找零</span>
+                <span className="font-semibold text-green-600 text-base">¥{fmt(change)}</span>
+              </div>
+            )}
+            {receivedAmount && parseFloat(receivedAmount) < finalTotal && (
+              <div className="flex justify-between items-center text-sm pt-1 border-t border-dashed border-gray-200">
+                <span className="text-gray-500">还差</span>
+                <span className="font-semibold text-red-500 text-base">¥{fmt(finalTotal - (parseFloat(receivedAmount) || 0))}</span>
               </div>
             )}
             <button onClick={checkout}
