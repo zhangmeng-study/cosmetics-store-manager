@@ -2302,19 +2302,126 @@ function App() {
     setTimeout(() => setToast(null), 2500);
   };
 
+  // 自动导出今日商品和会员数据为 Excel
+  const autoExportTodayData = () => {
+    try {
+      const today = todayStr();
+      // 筛选今天创建或更新的商品和会员
+      const isToday = item => {
+        const created = item.createdAt ? fmtDate(item.createdAt) : '';
+        const updated = item.updatedAt ? fmtDate(item.updatedAt) : '';
+        return created === today || updated === today;
+      };
+      const todayProducts = products.filter(isToday);
+      const todayMembers = members.filter(isToday);
+      if (todayProducts.length === 0 && todayMembers.length === 0) return;
+      // 获取分类名称
+      const getCategoryName = catId => {
+        const cat = CATEGORIES.find(c => c.id === catId);
+        return cat ? cat.name : catId || '';
+      };
+      // 获取会员等级名称
+      const getLevelName = levelId => {
+        const lv = MEMBER_LEVELS.find(l => l.id === levelId);
+        return lv ? lv.name : levelId || '';
+      };
+      // 构建商品 sheet 数据
+      const productRows = todayProducts.map(p => ({
+        '商品名称': p.name || '',
+        '分类': getCategoryName(p.category),
+        '售价': p.price || 0,
+        '成本价': p.cost || 0,
+        '库存': p.stock || 0,
+        '条码': p.barcode || '',
+        '单位': p.unit || '',
+        '创建时间': p.createdAt ? fmtDate(p.createdAt) : ''
+      }));
+      // 构建会员 sheet 数据
+      const memberRows = todayMembers.map(m => ({
+        '姓名': m.name || '',
+        '手机号': m.phone || '',
+        '等级': getLevelName(m.level),
+        '积分': m.points || 0,
+        '生日': m.birthday || '',
+        '备注': m.note || '',
+        '创建时间': m.createdAt ? fmtDate(m.createdAt) : ''
+      }));
+      // 生成 Excel
+      const wb = XLSX.utils.book_new();
+      if (productRows.length > 0) {
+        const ws1 = XLSX.utils.json_to_sheet(productRows);
+        ws1['!cols'] = [{
+          wch: 20
+        }, {
+          wch: 10
+        }, {
+          wch: 10
+        }, {
+          wch: 10
+        }, {
+          wch: 8
+        }, {
+          wch: 16
+        }, {
+          wch: 6
+        }, {
+          wch: 12
+        }];
+        XLSX.utils.book_append_sheet(wb, ws1, '商品记录');
+      }
+      if (memberRows.length > 0) {
+        const ws2 = XLSX.utils.json_to_sheet(memberRows);
+        ws2['!cols'] = [{
+          wch: 12
+        }, {
+          wch: 14
+        }, {
+          wch: 12
+        }, {
+          wch: 8
+        }, {
+          wch: 12
+        }, {
+          wch: 20
+        }, {
+          wch: 12
+        }];
+        XLSX.utils.book_append_sheet(wb, ws2, '会员记录');
+      }
+      const wbout = XLSX.write(wb, {
+        bookType: 'xlsx',
+        type: 'array'
+      });
+      const blob = new Blob([wbout], {
+        type: 'application/octet-stream'
+      });
+      downloadBlob(blob, `美妆门店数据_${today}.xlsx`);
+    } catch (e) {
+      console.warn('自动导出失败:', e);
+    }
+  };
+
   // 商品操作
   const saveProduct = data => {
     setProducts(ps => {
       const idx = ps.findIndex(p => p.id === data.id);
       if (idx >= 0) {
         const updated = [...ps];
-        updated[idx] = data;
+        updated[idx] = {
+          ...data,
+          updatedAt: new Date().toISOString()
+        };
         showToast('商品已更新');
         return updated;
       }
       showToast('商品已添加');
-      return [...ps, data];
+      return [...ps, {
+        ...data,
+        createdAt: new Date().toISOString()
+      }];
     });
+    // 自动导出今日数据
+    setTimeout(() => autoExportTodayData(), 300);
   };
   const deleteProduct = id => {
     setProducts(ps => ps.filter(p => p.id !== id));
@@ -2331,13 +2438,21 @@ function App() {
       const idx = ms.findIndex(m => m.id === data.id);
       if (idx >= 0) {
         const updated = [...ms];
-        updated[idx] = data;
+        updated[idx] = {
+          ...data,
+          updatedAt: new Date().toISOString()
+        };
         showToast('会员已更新');
         return updated;
       }
       showToast('会员已添加');
-      return [...ms, data];
+      return [...ms, {
+        ...data,
+        createdAt: new Date().toISOString()
+      }];
     });
+    // 自动导出今日数据
+    setTimeout(() => autoExportTodayData(), 300);
   };
   const deleteMember = id => {
     setMembers(ms => ms.filter(m => m.id !== id));
