@@ -481,6 +481,12 @@ const SHORTCUTS = [{
   key: 'F3',
   desc: '搜索商品'
 }, {
+  key: 'F4',
+  desc: '聚焦收款金额输入框'
+}, {
+  key: 'Ctrl+R',
+  desc: '聚焦收款金额输入框（备选）'
+}, {
   key: '1-4',
   desc: '选择支付方式（微信/支付宝/信用卡/现金）'
 }, {
@@ -980,6 +986,7 @@ function DashboardPage({
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [customDiscount, setCustomDiscount] = useState('');
   const [receivedAmount, setReceivedAmount] = useState('');
+  const [receivedAmountManuallyEdited, setReceivedAmountManuallyEdited] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
   const [showMemberSearchModal, setShowMemberSearchModal] = useState(false);
   const [selectedMemberIndex, setSelectedMemberIndex] = useState(0);
@@ -992,6 +999,7 @@ function DashboardPage({
   const [postCheckout, setPostCheckout] = useState(false); // true after checkout, waiting for Enter to close drawer
   const memberSearchRef = useRef(null);
   const barcodeRef = useRef(null);
+  const receivedAmountRef = useRef(null);
   const filtered = useMemo(() => {
     let list = products;
     if (category !== 'all') list = list.filter(p => p.category === category);
@@ -1017,6 +1025,13 @@ function DashboardPage({
   const calculatedTotal = cartTotal * discount;
   const finalTotal = editingTotal && customTotal !== '' ? parseFloat(customTotal) || 0 : calculatedTotal;
   const change = receivedAmount ? Math.max(0, (parseFloat(receivedAmount) || 0) - finalTotal) : 0;
+
+  // Auto-fill received amount when finalTotal changes (if not manually edited)
+  useEffect(() => {
+    if (finalTotal > 0 && !receivedAmountManuallyEdited) {
+      setReceivedAmount(finalTotal.toFixed(2));
+    }
+  }, [finalTotal, receivedAmountManuallyEdited]);
   const addToCart = product => {
     setCart(c => {
       const exist = c.find(i => i.id === product.id);
@@ -1125,6 +1140,7 @@ function DashboardPage({
     setEditingDiscount(false);
     setCustomDiscount('');
     setReceivedAmount('');
+    setReceivedAmountManuallyEdited(false);
     setPaymentMethod('cash');
     setMemberSearch('');
   };
@@ -1152,6 +1168,10 @@ function DashboardPage({
         setSearch('');
         setSelectedProductIndex(0);
         setShowProductSearchModal(true);
+      } else if (e.key === 'F4' || e.ctrlKey && e.key === 'r') {
+        e.preventDefault();
+        receivedAmountRef.current?.focus();
+        receivedAmountRef.current?.select();
       } else if (e.key === 'Enter' && !isInput) {
         e.preventDefault();
         if (postCheckout) {
@@ -1163,7 +1183,7 @@ function DashboardPage({
           checkout();
         }
       } else if (!isInput) {
-        // Number keys 1-4 for payment methods (only when not in input)
+        // Number keys 1-4 for payment methods (only when not in any input field)
         if (e.key >= '1' && e.key <= '4') {
           e.preventDefault();
           const idx = parseInt(e.key) - 1;
@@ -1722,13 +1742,17 @@ function DashboardPage({
   }, "\u6536\u6B3E"), /*#__PURE__*/React.createElement("span", {
     className: "text-sm text-gray-400"
   }, "\xA5"), /*#__PURE__*/React.createElement("input", {
+    ref: receivedAmountRef,
     type: "number",
     min: "0",
     step: "0.01",
     value: receivedAmount,
-    onChange: e => setReceivedAmount(e.target.value),
+    onChange: e => {
+      setReceivedAmount(e.target.value);
+      setReceivedAmountManuallyEdited(true);
+    },
     className: "flex-1 px-2 py-1.5 border border-gray-300 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500",
-    placeholder: "\u8F93\u5165\u6536\u6B3E\u91D1\u989D"
+    placeholder: "\u8F93\u5165\u6536\u6B3E\u91D1\u989D (F4)"
   })), receivedAmount && parseFloat(receivedAmount) >= finalTotal && /*#__PURE__*/React.createElement("div", {
     className: "flex justify-between items-center text-sm pt-1 border-t border-dashed border-gray-200"
   }, /*#__PURE__*/React.createElement("span", {
@@ -2523,6 +2547,18 @@ function StatsPage({
     const totalItems = filtered.reduce((s, sale) => s + sale.items.reduce((c, i) => c + i.qty, 0), 0);
     const avgOrder = totalCount > 0 ? totalRevenue / totalCount : 0;
 
+    // Calculate total cost and profit
+    let totalCost = 0;
+    filtered.forEach(s => {
+      s.items.forEach(item => {
+        const product = products.find(p => p.id === item.id);
+        const cost = product ? product.cost || 0 : 0;
+        totalCost += cost * item.qty;
+      });
+    });
+    const totalProfit = totalRevenue - totalCost;
+    const profitMargin = totalRevenue > 0 ? totalProfit / totalRevenue * 100 : 0;
+
     // 按日期汇总
     const byDate = {};
     filtered.forEach(s => {
@@ -2554,6 +2590,9 @@ function StatsPage({
       totalCount,
       totalItems,
       avgOrder,
+      totalCost,
+      totalProfit,
+      profitMargin,
       chartData,
       categoryData
     };
@@ -2586,7 +2625,7 @@ function StatsPage({
     title: "\u6682\u65E0\u9500\u552E\u6570\u636E",
     hint: "\u5728\u6536\u94F6\u53F0\u5B8C\u6210\u4E00\u7B14\u4EA4\u6613\u540E\u5373\u53EF\u67E5\u770B\u7EDF\u8BA1"
   })) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    className: "grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"
+    className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6"
   }, /*#__PURE__*/React.createElement(StatCard, {
     icon: MoneyIcon,
     label: "\u8425\u4E1A\u603B\u989D",
@@ -2607,6 +2646,23 @@ function StatsPage({
     label: "\u5BA2\u5355\u4EF7",
     value: "¥" + fmt(stats.avgOrder),
     color: "text-orange-600"
+  }), /*#__PURE__*/React.createElement(StatCard, {
+    icon: TagIcon,
+    label: "\u603B\u6210\u672C",
+    value: "¥" + fmt(stats.totalCost),
+    color: "text-gray-600"
+  }), /*#__PURE__*/React.createElement(StatCard, {
+    icon: TrendIcon,
+    label: "\u603B\u5229\u6DA6",
+    value: "¥" + fmt(stats.totalProfit),
+    color: stats.totalProfit >= 0 ? "text-green-600" : "text-red-600"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 md:grid-cols-3 gap-3 mb-6"
+  }, /*#__PURE__*/React.createElement(StatCard, {
+    icon: ChartIcon,
+    label: "\u5229\u6DA6\u7387",
+    value: fmt(stats.profitMargin) + "%",
+    color: stats.profitMargin >= 0 ? "text-green-600" : "text-red-600"
   })), /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6"
   }, /*#__PURE__*/React.createElement("div", {
