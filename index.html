@@ -1021,11 +1021,31 @@ function DashboardPage({
   const barcodeRef = useRef(null);
   const receivedAmountRef = useRef(null);
   const paymentMethodRef = useRef(paymentMethod); // Track current payment method
+  const cartRef = useRef(cart); // Track current cart
+  const finalTotalRef = useRef(finalTotal); // Track current finalTotal
+  const changeRef = useRef(change); // Track current change
+  const memberIdRef = useRef(memberId); // Track current memberId
+  const discountRef = useRef(discount); // Track current discount
 
-  // Keep paymentMethodRef in sync with paymentMethod state
+  // Keep refs in sync with state
   useEffect(() => {
     paymentMethodRef.current = paymentMethod;
   }, [paymentMethod]);
+  useEffect(() => {
+    cartRef.current = cart;
+  }, [cart]);
+  useEffect(() => {
+    finalTotalRef.current = finalTotal;
+  }, [finalTotal]);
+  useEffect(() => {
+    changeRef.current = change;
+  }, [change]);
+  useEffect(() => {
+    memberIdRef.current = memberId;
+  }, [memberId]);
+  useEffect(() => {
+    discountRef.current = discount;
+  }, [discount]);
   const filtered = useMemo(() => {
     let list = products;
     if (category !== 'all') list = list.filter(p => p.category === category);
@@ -1137,31 +1157,31 @@ function DashboardPage({
     };
   }));
   const checkout = () => {
-    if (!cart.length) {
+    if (!cartRef.current.length) {
       alert('购物车为空');
       return;
     }
     const currentPaymentMethod = paymentMethodRef.current; // Use ref to get latest value
     const pm = PAYMENT_METHODS.find(p => p.id === currentPaymentMethod);
     onCheckout({
-      items: cart.map(i => ({
+      items: cartRef.current.map(i => ({
         id: i.id,
         name: i.name,
         price: i.price,
         qty: i.qty
       })),
-      memberId: memberId || null,
+      memberId: memberIdRef.current || null,
       subtotal: cartTotal,
-      discount: discount,
-      total: finalTotal,
+      discount: discountRef.current,
+      total: finalTotalRef.current,
       memberName: member ? member.name : null,
       levelName: level.name,
       paymentMethod: currentPaymentMethod,
       paymentMethodName: pm ? pm.name : '现金'
     });
-    setLastChange(change);
+    setLastChange(changeRef.current);
     setLastPaymentMethod(currentPaymentMethod); // Save for cash drawer display
-    setLastTotal(finalTotal); // Save for cash drawer display
+    setLastTotal(finalTotalRef.current); // Save for cash drawer display
     setShowCashDrawer(true);
     setPostCheckout(true);
     setCart([]);
@@ -1270,7 +1290,7 @@ function DashboardPage({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart.length, paymentMethod, receivedAmount, finalTotal, change, memberId, postCheckout]);
+  }, [cart.length, paymentMethod, receivedAmount, finalTotal, change, memberId, postCheckout, lastPaymentMethod, lastTotal]);
 
   // Member search modal keyboard navigation
   useEffect(() => {
