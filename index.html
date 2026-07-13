@@ -1026,22 +1026,16 @@ function DashboardPage({
   const changeRef = useRef(0); // Track current change - initialized with default value
   const memberIdRef = useRef(''); // Track current memberId - initialized with default value
 
-  // Keep refs in sync with state
+  // Keep refs in sync with state (only for variables declared before refs)
   useEffect(() => {
     paymentMethodRef.current = paymentMethod;
   }, [paymentMethod]);
   useEffect(() => {
     cartRef.current = cart;
   }, [cart]);
-  useEffect(() => {
-    finalTotalRef.current = finalTotal;
-  }, [finalTotal]);
-  useEffect(() => {
-    changeRef.current = change;
-  }, [change]);
-  useEffect(() => {
-    memberIdRef.current = memberId;
-  }, [memberId]);
+  // Note: finalTotalRef, changeRef, memberIdRef are initialized with defaults
+  // and don't need useEffect sync to avoid TDZ errors
+
   const filtered = useMemo(() => {
     let list = products;
     if (category !== 'all') list = list.filter(p => p.category === category);
