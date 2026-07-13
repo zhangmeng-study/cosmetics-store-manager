@@ -1022,9 +1022,9 @@ function DashboardPage({
   const receivedAmountRef = useRef(null);
   const paymentMethodRef = useRef(paymentMethod); // Track current payment method
   const cartRef = useRef(cart); // Track current cart
-  const finalTotalRef = useRef(finalTotal); // Track current finalTotal
-  const changeRef = useRef(change); // Track current change
-  const memberIdRef = useRef(memberId); // Track current memberId
+  const finalTotalRef = useRef(0); // Track current finalTotal - initialized with default value
+  const changeRef = useRef(0); // Track current change - initialized with default value
+  const memberIdRef = useRef(''); // Track current memberId - initialized with default value
 
   // Keep refs in sync with state
   useEffect(() => {
