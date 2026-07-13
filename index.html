@@ -1060,12 +1060,18 @@ function DashboardPage({
     }
     return list;
   }, [products, search, category]);
-  const cartTotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.qty, 0), [cart]);
+  const cartTotal = useMemo(() => {
+    return cart.reduce((s, i) => {
+      const effectivePrice = confirmedItemPrices[i.id] !== undefined ? confirmedItemPrices[i.id] : i.price;
+      const effectiveDiscount = confirmedItemDiscounts[i.id] !== undefined ? confirmedItemDiscounts[i.id] : 1.0;
+      return s + effectivePrice * effectiveDiscount * i.qty;
+    }, 0);
+  }, [cart, confirmedItemPrices, confirmedItemDiscounts]);
   const member = members.find(m => m.id === memberId);
   const level = member ? getLevel(member.points) : MEMBER_LEVELS[0];
   // Use confirmedDiscount if set, otherwise fall back to level.discount
   const discount = confirmedDiscount !== null ? confirmedDiscount : editingDiscount && customDiscount !== '' ? parseFloat(customDiscount) || 1 : level.discount;
-  const calculatedTotal = cartTotal * discount;
+  const calculatedTotal = cartTotal; // cartTotal already includes per-item discounts, no need to apply global discount again
   // Use confirmedTotal if set, otherwise fall back to calculatedTotal
   const finalTotal = confirmedTotal !== null ? confirmedTotal : editingTotal && customTotal !== '' ? parseFloat(customTotal) || 0 : calculatedTotal;
   const change = receivedAmount ? Math.max(0, (parseFloat(receivedAmount) || 0) - finalTotal) : 0;
