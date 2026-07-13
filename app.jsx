@@ -82,6 +82,12 @@ const LockIcon = (props) => (
 const KeyboardIcon = (props) => (
   <Icon {...props}><rect x="2" y="4" width="20" height="16" rx="2" /><line x1="6" y1="8" x2="6.01" y2="8" /><line x1="10" y1="8" x2="10.01" y2="8" /><line x1="14" y1="8" x2="14.01" y2="8" /><line x1="18" y1="8" x2="18.01" y2="8" /><line x1="6" y1="12" x2="6.01" y2="12" /><line x1="10" y1="12" x2="10.01" y2="12" /><line x1="14" y1="12" x2="14.01" y2="12" /><line x1="18" y1="12" x2="18.01" y2="12" /><line x1="8" y1="16" x2="16" y2="16" /></Icon>
 );
+const ListIcon = (props) => (
+  <Icon {...props}><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></Icon>
+);
+const GridViewIcon = (props) => (
+  <Icon {...props}><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></Icon>
+);
 
 // ===== 常量 =====
 const CATEGORIES = [
@@ -117,7 +123,7 @@ const PAYMENT_METHODS = [
 const SHORTCUTS = [
   { key: 'F1', desc: '显示快捷键帮助' },
   { key: 'F2', desc: '搜索会员' },
-  { key: 'F3', desc: '打开/关闭钱箱' },
+  { key: 'Enter', desc: '打开/关闭钱箱' },
   { key: 'F9', desc: '结账' },
   { key: 'Esc', desc: '关闭弹窗/取消编辑' },
 ];
@@ -601,9 +607,12 @@ function DashboardPage({ products, members, onCheckout }) {
       } else if (e.key === 'F2') {
         e.preventDefault();
         memberSearchRef.current?.focus();
-      } else if (e.key === 'F3') {
-        e.preventDefault();
-        setShowCashDrawer(v => !v);
+      } else if (e.key === 'Enter') {
+        const tag = document.activeElement?.tagName;
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+          e.preventDefault();
+          setShowCashDrawer(v => !v);
+        }
       } else if (e.key === 'F9') {
         e.preventDefault();
         if (cart.length > 0) checkout();
@@ -875,7 +884,7 @@ function DashboardPage({ products, members, onCheckout }) {
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-sm text-gray-500">支付方式</span>
                 <button onClick={() => setShowCashDrawer(v => !v)}
-                  className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1" title="打开钱箱 (F3)">
+                  className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1" title="打开钱箱 (Enter)">
                   <BoxIcon className="w-3 h-3" /> 钱箱
                 </button>
               </div>
@@ -927,7 +936,7 @@ function DashboardPage({ products, members, onCheckout }) {
               )}
               <button onClick={() => setShowCashDrawer(false)}
                 className="w-full py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium mt-2">
-                关闭钱箱 (F3)
+                关闭钱箱 (Enter)
               </button>
             </div>
           </div>
@@ -1318,6 +1327,7 @@ function MembersPage({ members, onSaveMember, onDeleteMember, pointsRecords, onA
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [pointsMember, setPointsMember] = useState(null);
+  const [viewMode, setViewMode] = useState('card'); // 'card' or 'table'
 
   const filtered = useMemo(() => {
     if (!search.trim()) return members;
@@ -1341,6 +1351,18 @@ function MembersPage({ members, onSaveMember, onDeleteMember, pointsRecords, onA
             placeholder="搜索会员姓名或手机号..."
             className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
+        <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+          <button onClick={() => setViewMode('card')}
+            className={"px-2.5 py-2 transition-colors flex items-center gap-1 text-sm " + (viewMode === 'card' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50')}
+            title="卡片视图">
+            <GridViewIcon className="w-4 h-4" />
+          </button>
+          <button onClick={() => setViewMode('table')}
+            className={"px-2.5 py-2 transition-colors flex items-center gap-1 text-sm border-l border-gray-300 " + (viewMode === 'table' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50')}
+            title="表格视图">
+            <ListIcon className="w-4 h-4" />
+          </button>
+        </div>
         <button onClick={handleAdd}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 whitespace-nowrap">
           <PlusIcon className="w-4 h-4" /> 添加会员
@@ -1352,7 +1374,7 @@ function MembersPage({ members, onSaveMember, onDeleteMember, pointsRecords, onA
           <EmptyState icon={UsersIcon} title={members.length === 0 ? "暂无会员数据" : "未找到匹配会员"}
             hint={members.length === 0 ? "点击「添加会员」开始管理" : "试试其他关键词"} />
         </div>
-      ) : (
+      ) : viewMode === 'card' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           {filtered.map(m => {
             const level = getLevel(m.points);
@@ -1399,6 +1421,63 @@ function MembersPage({ members, onSaveMember, onDeleteMember, pointsRecords, onA
               </div>
             );
           })}
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-gray-500 border-b border-gray-200">
+                <tr>
+                  <th className="text-left py-3 px-4 font-medium">会员</th>
+                  <th className="text-left py-3 px-4 font-medium">手机号</th>
+                  <th className="text-left py-3 px-4 font-medium">等级</th>
+                  <th className="text-right py-3 px-4 font-medium">积分</th>
+                  <th className="text-right py-3 px-4 font-medium">折算价格</th>
+                  <th className="text-right py-3 px-4 font-medium">折扣</th>
+                  <th className="text-left py-3 px-4 font-medium">生日</th>
+                  <th className="text-center py-3 px-4 font-medium">操作</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filtered.map(m => {
+                  const level = getLevel(m.points);
+                  return (
+                    <tr key={m.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs">
+                            {m.name.charAt(0)}
+                          </div>
+                          <span className="font-medium text-gray-800">{m.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">{m.phone || '-'}</td>
+                      <td className="py-3 px-4">
+                        <span className={"text-xs px-2 py-1 rounded-full " + level.bg + " " + level.color}>{level.name}</span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-medium text-gray-700">{m.points || 0}</td>
+                      <td className="py-3 px-4 text-right text-blue-600">¥{fmt((m.points || 0) * 0.05)}</td>
+                      <td className="py-3 px-4 text-right text-gray-700">{(level.discount * 10).toFixed(1)}折</td>
+                      <td className="py-3 px-4 text-gray-500">{m.birthday || '-'}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => handleEdit(m)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="编辑">
+                            <EditIcon className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => setPointsMember(m)} className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-colors" title="积分记录">
+                            <ReceiptIcon className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handleDelete(m)} className="p-1.5 text-red-400 hover:bg-red-50 rounded transition-colors" title="删除">
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -2245,14 +2324,14 @@ function App() {
     if (sale.memberId) {
       setMembers(ms => ms.map(m => {
         if (m.id !== sale.memberId) return m;
-        const points = (m.points || 0) + Math.floor(sale.total);
+        const points = (m.points || 0) + sale.total;
         return { ...m, points };
       }));
       setPointsRecords(rs => [...rs, {
         id: uid(),
         memberId: sale.memberId,
         memberName: sale.memberName || '',
-        points: Math.floor(sale.total),
+        points: sale.total,
         type: '购买积分',
         description: `购物消费 ¥${fmt(sale.total)}（${sale.items.map(i => i.name + '×' + i.qty).join('，')}）`,
         date: todayStr(),
@@ -2277,14 +2356,14 @@ function App() {
       if (sale.memberId) {
         setMembers(ms => ms.map(m => {
           if (m.id !== sale.memberId) return m;
-          const points = Math.max(0, (m.points || 0) - Math.floor(sale.total));
+          const points = Math.max(0, (m.points || 0) - sale.total);
           return { ...m, points };
         }));
         setPointsRecords(rs => [...rs, {
           id: uid(),
           memberId: sale.memberId,
           memberName: sale.memberName || '',
-          points: -Math.floor(sale.total),
+          points: -sale.total,
           type: '退货扣减',
           description: `退货退款 ¥${fmt(sale.total)}（${sale.items.map(i => i.name + '×' + i.qty).join('，')}）`,
           date: todayStr(),
