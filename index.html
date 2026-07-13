@@ -1208,7 +1208,7 @@ function DashboardPage({
         e.preventDefault();
         setEditingTotal(true);
         setCustomTotal(String(calculatedTotal.toFixed(2)));
-      } else if (e.key === 'Enter' && !isInput) {
+      } else if (e.key === 'Enter' && !isInput && !editingDiscount && !editingTotal) {
         e.preventDefault();
         if (postCheckout) {
           // Second Enter after checkout: close cash drawer
@@ -1218,7 +1218,7 @@ function DashboardPage({
           // First Enter: trigger checkout
           checkout();
         }
-      } else if (!isInput && cart.length > 0) {
+      } else if (!isInput && cart.length > 0 && !editingDiscount && !editingTotal) {
         // Number keys 1-4 for payment methods (only when not in any input field)
         if (e.key >= '1' && e.key <= '4') {
           e.preventDefault();
