@@ -1287,7 +1287,7 @@ function DashboardPage({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [postCheckout]);
+  }, [cart.length, editingDiscount, editingTotal, postCheckout]);
 
   // Member search modal keyboard navigation
   useEffect(() => {
