@@ -1186,11 +1186,6 @@ function DashboardPage({
         ...prev,
         [editingItemId]: price
       }));
-      // Update cart with new price
-      setCart(c => c.map(i => i.id === editingItemId ? {
-        ...i,
-        price: price
-      } : i));
     }
     closeItemEdit();
   };
