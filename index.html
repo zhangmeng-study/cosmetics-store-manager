@@ -1,20 +1,27 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>美妆门店管理系统</title>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
-<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
-<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script src="https://cdn.tailwindcss.com?plugins=line-clamp"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>美妆门店管理系统</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.0/Recharts.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Microsoft YaHei, sans-serif; -webkit-font-smoothing: antialiased; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+  </style>
 </head>
 <body>
-<div id="root"></div>
-<script>function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
+  <div id="root"></div>
+  <script>
+function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
 // ===== 解构全局变量 =====
 const {
   useState,
@@ -994,6 +1001,7 @@ function DashboardPage({
   const [customTotal, setCustomTotal] = useState('');
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [customDiscount, setCustomDiscount] = useState('');
+  const [confirmedDiscount, setConfirmedDiscount] = useState(null); // Persist custom discount after Enter confirmation
   const [receivedAmount, setReceivedAmount] = useState('');
   const [receivedAmountManuallyEdited, setReceivedAmountManuallyEdited] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
@@ -1009,6 +1017,12 @@ function DashboardPage({
   const memberSearchRef = useRef(null);
   const barcodeRef = useRef(null);
   const receivedAmountRef = useRef(null);
+  const paymentMethodRef = useRef(paymentMethod); // Track current payment method
+
+  // Keep paymentMethodRef in sync with paymentMethod state
+  useEffect(() => {
+    paymentMethodRef.current = paymentMethod;
+  }, [paymentMethod]);
   const filtered = useMemo(() => {
     let list = products;
     if (category !== 'all') list = list.filter(p => p.category === category);
@@ -1030,7 +1044,8 @@ function DashboardPage({
   const cartTotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.qty, 0), [cart]);
   const member = members.find(m => m.id === memberId);
   const level = member ? getLevel(member.points) : MEMBER_LEVELS[0];
-  const discount = editingDiscount && customDiscount !== '' ? parseFloat(customDiscount) || 1 : level.discount;
+  // Use confirmedDiscount if set, otherwise fall back to level.discount
+  const discount = confirmedDiscount !== null ? confirmedDiscount : editingDiscount && customDiscount !== '' ? parseFloat(customDiscount) || 1 : level.discount;
   const calculatedTotal = cartTotal * discount;
   const finalTotal = editingTotal && customTotal !== '' ? parseFloat(customTotal) || 0 : calculatedTotal;
   const change = receivedAmount ? Math.max(0, (parseFloat(receivedAmount) || 0) - finalTotal) : 0;
@@ -1122,7 +1137,8 @@ function DashboardPage({
       alert('购物车为空');
       return;
     }
-    const pm = PAYMENT_METHODS.find(p => p.id === paymentMethod);
+    const currentPaymentMethod = paymentMethodRef.current; // Use ref to get latest value
+    const pm = PAYMENT_METHODS.find(p => p.id === currentPaymentMethod);
     onCheckout({
       items: cart.map(i => ({
         id: i.id,
@@ -1136,7 +1152,7 @@ function DashboardPage({
       total: finalTotal,
       memberName: member ? member.name : null,
       levelName: level.name,
-      paymentMethod: paymentMethod,
+      paymentMethod: currentPaymentMethod,
       paymentMethodName: pm ? pm.name : '现金'
     });
     setLastChange(change);
@@ -1148,6 +1164,7 @@ function DashboardPage({
     setCustomTotal('');
     setEditingDiscount(false);
     setCustomDiscount('');
+    setConfirmedDiscount(null); // Reset confirmed discount for next transaction
     setReceivedAmount('');
     setReceivedAmountManuallyEdited(false);
     setPaymentMethod('cash');
@@ -1184,7 +1201,9 @@ function DashboardPage({
       } else if (e.key === 'F5') {
         e.preventDefault();
         setEditingDiscount(true);
-        setCustomDiscount(String(discount));
+        // Show current effective discount (confirmed or member level or default 1.0)
+        const currentDiscount = confirmedDiscount !== null ? confirmedDiscount : member ? level.discount : 1.0;
+        setCustomDiscount(String(currentDiscount));
       } else if (e.key === 'F6') {
         e.preventDefault();
         setEditingTotal(true);
@@ -1231,6 +1250,7 @@ function DashboardPage({
         setPostCheckout(false);
         setEditingDiscount(false);
         setCustomDiscount('');
+        setConfirmedDiscount(null); // Reset confirmed discount on cancel
         setEditingTotal(false);
         setCustomTotal('');
         setShowProductSearchModal(false);
@@ -1256,6 +1276,7 @@ function DashboardPage({
           e.preventDefault();
           if (filteredMembers[selectedMemberIndex]) {
             setMemberId(filteredMembers[selectedMemberIndex].id);
+            setConfirmedDiscount(null); // Reset custom discount when member changes
             setShowMemberSearchModal(false);
             setMemberSearch('');
             setSelectedMemberIndex(0);
@@ -1308,6 +1329,7 @@ function DashboardPage({
           e.preventDefault();
           const discountValue = parseFloat(customDiscount);
           if (!isNaN(discountValue) && discountValue > 0) {
+            setConfirmedDiscount(discountValue); // Persist the confirmed discount
             setEditingDiscount(false);
           } else {
             alert('请输入有效折扣倍数（如 0.8 表示8折）');
@@ -1475,6 +1497,7 @@ function DashboardPage({
   }, "\u79EF\u5206 ", member.points || 0)), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setMemberId('');
+      setConfirmedDiscount(null);
       setMemberSearch('');
     },
     className: "text-gray-400 hover:text-gray-600"
@@ -1533,6 +1556,7 @@ function DashboardPage({
       key: m.id,
       onClick: () => {
         setMemberId(m.id);
+        setConfirmedDiscount(null);
         setShowMemberSearchModal(false);
         setMemberSearch('');
         setSelectedMemberIndex(0);
@@ -3833,4 +3857,7 @@ function App() {
   }, toast));
 }
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(/*#__PURE__*/React.createElement(App, null));</script></body></html>
+root.render(/*#__PURE__*/React.createElement(App, null));
+  </script>
+</body>
+</html>
