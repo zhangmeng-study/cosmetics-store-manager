@@ -5,17 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>美妆门店管理系统</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.0/Recharts.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Microsoft YaHei, sans-serif; -webkit-font-smoothing: antialiased; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; -webkit-font-smoothing: antialiased; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 3px; }
-    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #a1a1a1; }
   </style>
 </head>
 <body>
@@ -1017,6 +1016,13 @@ function DashboardPage({
   const [postCheckout, setPostCheckout] = useState(false); // true after checkout, waiting for Enter to close drawer
   const [lastPaymentMethod, setLastPaymentMethod] = useState('cash'); // Save payment method used in last checkout
   const [lastTotal, setLastTotal] = useState(0); // Save total amount from last checkout
+
+  // Per-item editing states
+  const [editingItemId, setEditingItemId] = useState(null); // ID of item being edited
+  const [itemCustomPrices, setItemCustomPrices] = useState({}); // Map: itemId -> custom price
+  const [itemCustomDiscounts, setItemCustomDiscounts] = useState({}); // Map: itemId -> custom discount (0-1)
+  const [confirmedItemPrices, setConfirmedItemPrices] = useState({}); // Map: itemId -> confirmed custom price
+  const [confirmedItemDiscounts, setConfirmedItemDiscounts] = useState({}); // Map: itemId -> confirmed custom discount
   const memberSearchRef = useRef(null);
   const barcodeRef = useRef(null);
   const receivedAmountRef = useRef(null);
@@ -1146,6 +1152,73 @@ function DashboardPage({
       qty: newQty
     };
   }));
+
+  // Per-item editing functions
+  const openItemEdit = itemId => {
+    setEditingItemId(itemId);
+  };
+  const closeItemEdit = () => {
+    setEditingItemId(null);
+  };
+  const updateItemCustomPrice = value => {
+    setItemCustomPrices(prev => ({
+      ...prev,
+      [editingItemId]: value
+    }));
+  };
+  const updateItemCustomDiscount = value => {
+    setItemCustomDiscounts(prev => ({
+      ...prev,
+      [editingItemId]: value
+    }));
+  };
+  const confirmItemPrice = () => {
+    if (!editingItemId) return;
+    const price = parseFloat(itemCustomPrices[editingItemId]);
+    if (!isNaN(price) && price >= 0) {
+      setConfirmedItemPrices(prev => ({
+        ...prev,
+        [editingItemId]: price
+      }));
+      // Update cart with new price
+      setCart(c => c.map(i => i.id === editingItemId ? {
+        ...i,
+        price: price
+      } : i));
+    }
+    closeItemEdit();
+  };
+  const confirmItemDiscount = () => {
+    if (!editingItemId) return;
+    const disc = parseFloat(itemCustomDiscounts[editingItemId]);
+    if (!isNaN(disc) && disc > 0 && disc <= 1) {
+      setConfirmedItemDiscounts(prev => ({
+        ...prev,
+        [editingItemId]: disc
+      }));
+    }
+    closeItemEdit();
+  };
+
+  // Get effective price for an item (considering custom price or discount)
+  const getItemEffectivePrice = item => {
+    // Check for confirmed custom price first
+    if (confirmedItemPrices[item.id] !== undefined) {
+      return confirmedItemPrices[item.id];
+    }
+    // Otherwise use original price
+    return item.price;
+  };
+
+  // Get effective discount for an item
+  const getItemEffectiveDiscount = item => {
+    // Check for confirmed custom discount first
+    if (confirmedItemDiscounts[item.id] !== undefined) {
+      return confirmedItemDiscounts[item.id];
+    }
+    // Otherwise no item-level discount (use 1.0)
+    return 1.0;
+  };
   const checkout = () => {
     if (!cartRef.current.length) {
       alert('购物车为空');
@@ -1706,35 +1779,64 @@ function DashboardPage({
     className: "text-sm"
   }, "\u8D2D\u7269\u8F66\u7A7A\u7A7A\u5982\u4E5F")) : /*#__PURE__*/React.createElement("div", {
     className: "space-y-2"
-  }, cart.map(item => /*#__PURE__*/React.createElement("div", {
-    key: item.id,
-    className: "flex items-center gap-2"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "flex-1 min-w-0"
-  }, /*#__PURE__*/React.createElement("p", {
-    className: "text-sm font-medium text-gray-700 truncate"
-  }, item.name), /*#__PURE__*/React.createElement("p", {
-    className: "text-xs text-gray-400"
-  }, "\xA5", fmt(item.price), " \xD7 ", item.qty)), /*#__PURE__*/React.createElement("div", {
-    className: "flex items-center gap-1"
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => updateQty(item.id, -1),
-    className: "w-6 h-6 rounded flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600"
-  }, /*#__PURE__*/React.createElement(MinusIcon, {
-    className: "w-3 h-3"
-  })), /*#__PURE__*/React.createElement("span", {
-    className: "w-6 text-center text-sm"
-  }, item.qty), /*#__PURE__*/React.createElement("button", {
-    onClick: () => updateQty(item.id, 1),
-    className: "w-6 h-6 rounded flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600"
-  }, /*#__PURE__*/React.createElement(PlusIcon, {
-    className: "w-3 h-3"
-  })), /*#__PURE__*/React.createElement("button", {
-    onClick: () => removeFromCart(item.id),
-    className: "ml-1 text-red-400 hover:text-red-600"
-  }, /*#__PURE__*/React.createElement(TrashIcon, {
-    className: "w-3.5 h-3.5"
-  }))))))), cart.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, cart.map(item => {
+    const effectivePrice = getItemEffectivePrice(item);
+    const effectiveDiscount = getItemEffectiveDiscount(item);
+    const hasCustomPrice = confirmedItemPrices[item.id] !== undefined;
+    const hasCustomDiscount = confirmedItemDiscounts[item.id] !== undefined && confirmedItemDiscounts[item.id] < 1.0;
+    const itemTotal = effectivePrice * effectiveDiscount * item.qty;
+    return /*#__PURE__*/React.createElement("div", {
+      key: item.id,
+      className: "flex items-start gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors group"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex-1 min-w-0 cursor-pointer",
+      onClick: () => openItemEdit(item.id)
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center justify-between"
+    }, /*#__PURE__*/React.createElement("p", {
+      className: `text-sm font-medium truncate ${hasCustomPrice ? 'text-blue-600' : 'text-gray-700'}`
+    }, item.name, hasCustomPrice && /*#__PURE__*/React.createElement("span", {
+      className: "ml-1 text-xs text-blue-500"
+    }, "(\u6539\u4EF7)"), hasCustomDiscount && /*#__PURE__*/React.createElement("span", {
+      className: "ml-1 text-xs text-orange-500"
+    }, "(", Math.round((1 - effectiveDiscount) * 100), "%off)")), /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        openItemEdit(item.id);
+      },
+      className: "opacity-0 group-hover:opacity-100 text-blue-500 hover:text-blue-700 transition-opacity",
+      title: "\u7F16\u8F91\u4EF7\u683C\u548C\u6298\u6263"
+    }, /*#__PURE__*/React.createElement(EditIcon, {
+      className: "w-3.5 h-3.5"
+    }))), /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-2 text-xs text-gray-400 mt-0.5"
+    }, /*#__PURE__*/React.createElement("span", null, "\xA5", fmt(effectivePrice)), effectiveDiscount < 1.0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", null, "\xD7"), /*#__PURE__*/React.createElement("span", {
+      className: "text-orange-500"
+    }, (effectiveDiscount * 100).toFixed(0), "%")), /*#__PURE__*/React.createElement("span", null, "\xD7 ", item.qty), /*#__PURE__*/React.createElement("span", {
+      className: "text-gray-300"
+    }, "="), /*#__PURE__*/React.createElement("span", {
+      className: "font-medium text-gray-600"
+    }, "\xA5", fmt(itemTotal)))), /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-1 flex-shrink-0"
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => updateQty(item.id, -1),
+      className: "w-6 h-6 rounded flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600"
+    }, /*#__PURE__*/React.createElement(MinusIcon, {
+      className: "w-3 h-3"
+    })), /*#__PURE__*/React.createElement("span", {
+      className: "w-6 text-center text-sm"
+    }, item.qty), /*#__PURE__*/React.createElement("button", {
+      onClick: () => updateQty(item.id, 1),
+      className: "w-6 h-6 rounded flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600"
+    }, /*#__PURE__*/React.createElement(PlusIcon, {
+      className: "w-3 h-3"
+    })), /*#__PURE__*/React.createElement("button", {
+      onClick: () => removeFromCart(item.id),
+      className: "ml-1 text-red-400 hover:text-red-600"
+    }, /*#__PURE__*/React.createElement(TrashIcon, {
+      className: "w-3.5 h-3.5"
+    }))));
+  }))), cart.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "px-4 py-3 border-t border-gray-200 space-y-2"
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex justify-between text-sm text-gray-500"
@@ -1921,7 +2023,109 @@ function DashboardPage({
       setPostCheckout(false);
     },
     className: "w-full py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium mt-2"
-  }, "\u5173\u95ED\u94B1\u7BB1 (Enter)")))), showShortcuts && /*#__PURE__*/React.createElement(Modal, {
+  }, "\u5173\u95ED\u94B1\u7BB1 (Enter)")))), editingItemId && (() => {
+    const item = cart.find(i => i.id === editingItemId);
+    if (!item) return null;
+    const currentPrice = getItemEffectivePrice(item);
+    const currentDiscount = getItemEffectiveDiscount(item);
+    const tempPrice = itemCustomPrices[editingItemId] !== undefined ? parseFloat(itemCustomPrices[editingItemId]) : currentPrice;
+    const tempDiscount = itemCustomDiscounts[editingItemId] !== undefined ? parseFloat(itemCustomDiscounts[editingItemId]) : currentDiscount;
+    return /*#__PURE__*/React.createElement("div", {
+      className: "fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40",
+      onClick: closeItemEdit
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "bg-white rounded-2xl shadow-2xl w-96 max-h-[90vh] overflow-y-auto",
+      onClick: e => e.stopPropagation()
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 text-white"
+    }, /*#__PURE__*/React.createElement("h3", {
+      className: "text-lg font-bold flex items-center gap-2"
+    }, /*#__PURE__*/React.createElement(EditIcon, {
+      className: "w-5 h-5"
+    }), "\u7F16\u8F91\u5546\u54C1"), /*#__PURE__*/React.createElement("p", {
+      className: "text-sm text-blue-100 mt-1 truncate"
+    }, item.name)), /*#__PURE__*/React.createElement("div", {
+      className: "px-6 py-5 space-y-4"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "p-3 bg-gray-50 rounded-lg space-y-2 text-sm"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex justify-between"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "text-gray-500"
+    }, "\u539F\u4EF7"), /*#__PURE__*/React.createElement("span", {
+      className: "font-medium"
+    }, "\xA5", fmt(item.price))), /*#__PURE__*/React.createElement("div", {
+      className: "flex justify-between"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "text-gray-500"
+    }, "\u6570\u91CF"), /*#__PURE__*/React.createElement("span", {
+      className: "font-medium"
+    }, item.qty)), /*#__PURE__*/React.createElement("div", {
+      className: "flex justify-between border-t border-gray-200 pt-2"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "text-gray-500"
+    }, "\u5F53\u524D\u5C0F\u8BA1"), /*#__PURE__*/React.createElement("span", {
+      className: "font-bold text-blue-600"
+    }, "\xA5", fmt(currentPrice * currentDiscount * item.qty)))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "block text-sm font-medium text-gray-700 mb-2"
+    }, "\u4FEE\u6539\u5355\u4EF7 ", /*#__PURE__*/React.createElement("span", {
+      className: "text-xs text-gray-400"
+    }, "(\u53EF\u9009)")), /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-2"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "text-gray-500"
+    }, "\xA5"), /*#__PURE__*/React.createElement("input", {
+      type: "number",
+      min: "0",
+      step: "0.01",
+      value: itemCustomPrices[editingItemId] !== undefined ? itemCustomPrices[editingItemId] : '',
+      onChange: e => updateItemCustomPrice(e.target.value),
+      placeholder: currentPrice.toFixed(2),
+      className: "flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-right font-medium"
+    })), itemCustomPrices[editingItemId] && /*#__PURE__*/React.createElement("p", {
+      className: "text-xs text-blue-500 mt-1"
+    }, "\u65B0\u4EF7\u683C: \xA5", tempPrice.toFixed(2), tempPrice !== currentPrice && /*#__PURE__*/React.createElement("span", {
+      className: "ml-1"
+    }, "(", tempPrice > currentPrice ? '↑' : '↓', Math.abs((tempPrice - currentPrice) / currentPrice * 100).toFixed(1), "%)"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      className: "block text-sm font-medium text-gray-700 mb-2"
+    }, "\u4FEE\u6539\u6298\u6263 ", /*#__PURE__*/React.createElement("span", {
+      className: "text-xs text-gray-400"
+    }, "(\u53EF\u9009)")), /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-2"
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "number",
+      min: "0.01",
+      max: "1",
+      step: "0.01",
+      value: itemCustomDiscounts[editingItemId] !== undefined ? itemCustomDiscounts[editingItemId] : '',
+      onChange: e => updateItemCustomDiscount(e.target.value),
+      placeholder: (currentDiscount * 100).toFixed(0) + '%',
+      className: "flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-right font-medium"
+    }), /*#__PURE__*/React.createElement("span", {
+      className: "text-gray-500 text-sm"
+    }, "\u6298")), itemCustomDiscounts[editingItemId] && /*#__PURE__*/React.createElement("p", {
+      className: "text-xs text-orange-500 mt-1"
+    }, "\u65B0\u6298\u6263: ", (tempDiscount * 100).toFixed(0), "% off", tempDiscount < 1.0 && /*#__PURE__*/React.createElement("span", {
+      className: "ml-1"
+    }, "(\u7701 \xA5", fmt((1 - tempDiscount) * currentPrice * item.qty), ")"))), (itemCustomPrices[editingItemId] || itemCustomDiscounts[editingItemId]) && /*#__PURE__*/React.createElement("div", {
+      className: "p-3 bg-blue-50 border border-blue-200 rounded-lg"
+    }, /*#__PURE__*/React.createElement("p", {
+      className: "text-xs text-blue-600 font-medium mb-1"
+    }, "\u9884\u8BA1\u5C0F\u8BA1"), /*#__PURE__*/React.createElement("p", {
+      className: "text-xl font-bold text-blue-700"
+    }, "\xA5", fmt(tempPrice * tempDiscount * item.qty)))), /*#__PURE__*/React.createElement("div", {
+      className: "px-6 py-4 border-t border-gray-200 flex gap-2"
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: closeItemEdit,
+      className: "flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+    }, "\u53D6\u6D88 (Esc)"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        confirmItemPrice();
+        confirmItemDiscount();
+      },
+      className: "flex-1 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+    }, "\u786E\u8BA4\u4FEE\u6539"))));
+  })(), showShortcuts && /*#__PURE__*/React.createElement(Modal, {
     title: "\u5FEB\u6377\u952E\u5E2E\u52A9",
     onClose: () => setShowShortcuts(false)
   }, /*#__PURE__*/React.createElement("div", {
