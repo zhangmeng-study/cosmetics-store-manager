@@ -1002,6 +1002,7 @@ function DashboardPage({
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [customDiscount, setCustomDiscount] = useState('');
   const [confirmedDiscount, setConfirmedDiscount] = useState(null); // Persist custom discount after Enter confirmation
+  const [confirmedTotal, setConfirmedTotal] = useState(null); // Persist custom total price after Enter confirmation
   const [receivedAmount, setReceivedAmount] = useState('');
   const [receivedAmountManuallyEdited, setReceivedAmountManuallyEdited] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
@@ -1047,7 +1048,8 @@ function DashboardPage({
   // Use confirmedDiscount if set, otherwise fall back to level.discount
   const discount = confirmedDiscount !== null ? confirmedDiscount : editingDiscount && customDiscount !== '' ? parseFloat(customDiscount) || 1 : level.discount;
   const calculatedTotal = cartTotal * discount;
-  const finalTotal = editingTotal && customTotal !== '' ? parseFloat(customTotal) || 0 : calculatedTotal;
+  // Use confirmedTotal if set, otherwise fall back to calculatedTotal
+  const finalTotal = confirmedTotal !== null ? confirmedTotal : editingTotal && customTotal !== '' ? parseFloat(customTotal) || 0 : calculatedTotal;
   const change = receivedAmount ? Math.max(0, (parseFloat(receivedAmount) || 0) - finalTotal) : 0;
 
   // Auto-fill received amount when finalTotal changes (if not manually edited)
@@ -1165,6 +1167,7 @@ function DashboardPage({
     setEditingDiscount(false);
     setCustomDiscount('');
     setConfirmedDiscount(null); // Reset confirmed discount for next transaction
+    setConfirmedTotal(null); // Reset confirmed total for next transaction
     setReceivedAmount('');
     setReceivedAmountManuallyEdited(false);
     setPaymentMethod('cash');
@@ -1207,7 +1210,9 @@ function DashboardPage({
       } else if (e.key === 'F6') {
         e.preventDefault();
         setEditingTotal(true);
-        setCustomTotal(String(calculatedTotal.toFixed(2)));
+        // Show current effective total (confirmed or calculated)
+        const currentTotal = confirmedTotal !== null ? confirmedTotal : calculatedTotal;
+        setCustomTotal(String(currentTotal.toFixed(2)));
       } else if (e.key === 'Enter' && !isInput && !editingDiscount && !editingTotal) {
         e.preventDefault();
         if (postCheckout) {
@@ -1253,6 +1258,7 @@ function DashboardPage({
         setConfirmedDiscount(null); // Reset confirmed discount on cancel
         setEditingTotal(false);
         setCustomTotal('');
+        setConfirmedTotal(null); // Reset confirmed total on cancel
         setShowProductSearchModal(false);
         setSearch('');
         setSelectedProductIndex(0);
@@ -1277,6 +1283,7 @@ function DashboardPage({
           if (filteredMembers[selectedMemberIndex]) {
             setMemberId(filteredMembers[selectedMemberIndex].id);
             setConfirmedDiscount(null); // Reset custom discount when member changes
+            setConfirmedTotal(null); // Reset custom total when member changes
             setShowMemberSearchModal(false);
             setMemberSearch('');
             setSelectedMemberIndex(0);
@@ -1352,6 +1359,7 @@ function DashboardPage({
           e.preventDefault();
           const totalValue = parseFloat(customTotal);
           if (!isNaN(totalValue) && totalValue >= 0) {
+            setConfirmedTotal(totalValue); // Persist the confirmed total price
             setEditingTotal(false);
           } else {
             alert('请输入有效价格');
@@ -1498,6 +1506,7 @@ function DashboardPage({
     onClick: () => {
       setMemberId('');
       setConfirmedDiscount(null);
+      setConfirmedTotal(null);
       setMemberSearch('');
     },
     className: "text-gray-400 hover:text-gray-600"
@@ -1557,6 +1566,7 @@ function DashboardPage({
       onClick: () => {
         setMemberId(m.id);
         setConfirmedDiscount(null);
+        setConfirmedTotal(null);
         setShowMemberSearchModal(false);
         setMemberSearch('');
         setSelectedMemberIndex(0);
@@ -1733,6 +1743,7 @@ function DashboardPage({
     onClick: () => {
       setEditingDiscount(false);
       setCustomDiscount('');
+      setConfirmedDiscount(null);
     },
     className: "text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap"
   }, "\u53D6\u6D88")) : /*#__PURE__*/React.createElement("div", {
@@ -1771,6 +1782,7 @@ function DashboardPage({
     onClick: () => {
       setEditingTotal(false);
       setCustomTotal('');
+      setConfirmedTotal(null);
     },
     className: "text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap"
   }, "\u53D6\u6D88")) : /*#__PURE__*/React.createElement("div", {
