@@ -1741,7 +1741,7 @@ function DashboardPage({
     className: "flex items-center gap-1.5"
   }, /*#__PURE__*/React.createElement("span", null, "\u6298\u6263"), discount < 1.0 && /*#__PURE__*/React.createElement("span", {
     className: "text-xs text-orange-500"
-  }, "(", level.name, " ", (1 - discount) * 100, "%off)"), /*#__PURE__*/React.createElement("button", {
+  }, "(", level.name, " ", Math.round((1 - discount) * 100), "%off)"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setEditingDiscount(true);
       setCustomDiscount(String(discount));
