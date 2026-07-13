@@ -1015,6 +1015,8 @@ function DashboardPage({
   const [lastChange, setLastChange] = useState(0);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [postCheckout, setPostCheckout] = useState(false); // true after checkout, waiting for Enter to close drawer
+  const [lastPaymentMethod, setLastPaymentMethod] = useState('cash'); // Save payment method used in last checkout
+  const [lastTotal, setLastTotal] = useState(0); // Save total amount from last checkout
   const memberSearchRef = useRef(null);
   const barcodeRef = useRef(null);
   const receivedAmountRef = useRef(null);
@@ -1158,6 +1160,8 @@ function DashboardPage({
       paymentMethodName: pm ? pm.name : '现金'
     });
     setLastChange(change);
+    setLastPaymentMethod(currentPaymentMethod); // Save for cash drawer display
+    setLastTotal(finalTotal); // Save for cash drawer display
     setShowCashDrawer(true);
     setPostCheckout(true);
     setCart([]);
@@ -1888,13 +1892,13 @@ function DashboardPage({
     className: "text-gray-500"
   }, "\u652F\u4ED8\u65B9\u5F0F"), /*#__PURE__*/React.createElement("span", {
     className: "font-medium text-gray-700"
-  }, PAYMENT_METHODS.find(p => p.id === paymentMethod)?.name || '现金')), /*#__PURE__*/React.createElement("div", {
+  }, PAYMENT_METHODS.find(p => p.id === lastPaymentMethod)?.name || '现金')), /*#__PURE__*/React.createElement("div", {
     className: "flex justify-between text-sm"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-gray-500"
   }, "\u5E94\u6536\u91D1\u989D"), /*#__PURE__*/React.createElement("span", {
     className: "font-bold text-blue-600 text-lg"
-  }, "\xA5", fmt(finalTotal || 0))), lastChange > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "\xA5", fmt(lastTotal))), lastChange > 0 && /*#__PURE__*/React.createElement("div", {
     className: "flex justify-between text-sm"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-gray-500"
