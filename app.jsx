@@ -123,8 +123,9 @@ const PAYMENT_METHODS = [
 const SHORTCUTS = [
   { key: 'F1', desc: '显示快捷键帮助' },
   { key: 'F2', desc: '搜索会员' },
-  { key: 'Enter', desc: '打开/关闭钱箱' },
-  { key: 'F9', desc: '结账' },
+  { key: '1-4', desc: '选择支付方式（微信/支付宝/信用卡/现金）' },
+  { key: 'Enter', desc: '结账 / 关闭钱箱' },
+  { key: 'F9', desc: '结账（备选）' },
   { key: 'Esc', desc: '关闭弹窗/取消编辑' },
 ];
 
@@ -488,6 +489,7 @@ function DashboardPage({ products, members, onCheckout }) {
   const [showCashDrawer, setShowCashDrawer] = useState(false);
   const [lastChange, setLastChange] = useState(0);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [postCheckout, setPostCheckout] = useState(false); // true after checkout, waiting for Enter to close drawer
   const memberSearchRef = useRef(null);
   const barcodeRef = useRef(null);
 
@@ -581,6 +583,7 @@ function DashboardPage({ products, members, onCheckout }) {
     });
     setLastChange(change);
     setShowCashDrawer(true);
+    setPostCheckout(true);
     setCart([]);
     setMemberId('');
     setEditingTotal(false);
@@ -601,17 +604,33 @@ function DashboardPage({ products, members, onCheckout }) {
   // 快捷键处理
   useEffect(() => {
     const handleKeyDown = (e) => {
+      const tag = document.activeElement?.tagName;
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+      
       if (e.key === 'F1') {
         e.preventDefault();
         setShowShortcuts(true);
       } else if (e.key === 'F2') {
         e.preventDefault();
         memberSearchRef.current?.focus();
-      } else if (e.key === 'Enter') {
-        const tag = document.activeElement?.tagName;
-        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+      } else if (e.key === 'Enter' && !isInput) {
+        e.preventDefault();
+        if (postCheckout) {
+          // Second Enter after checkout: close cash drawer
+          setShowCashDrawer(false);
+          setPostCheckout(false);
+        } else if (cart.length > 0) {
+          // First Enter: trigger checkout
+          checkout();
+        }
+      } else if (!isInput) {
+        // Number keys 1-4 for payment methods (only when not in input)
+        if (e.key >= '1' && e.key <= '4') {
           e.preventDefault();
-          setShowCashDrawer(v => !v);
+          const idx = parseInt(e.key) - 1;
+          if (idx < PAYMENT_METHODS.length) {
+            setPaymentMethod(PAYMENT_METHODS[idx].id);
+          }
         }
       } else if (e.key === 'F9') {
         e.preventDefault();
@@ -619,6 +638,7 @@ function DashboardPage({ products, members, onCheckout }) {
       } else if (e.key === 'Escape') {
         setShowShortcuts(false);
         setShowCashDrawer(false);
+        setPostCheckout(false);
         setEditingDiscount(false);
         setCustomDiscount('');
         setEditingTotal(false);
@@ -627,7 +647,51 @@ function DashboardPage({ products, members, onCheckout }) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart.length, paymentMethod, receivedAmount, finalTotal, change, memberId]);
+  }, [cart.length, paymentMethod, receivedAmount, finalTotal, change, memberId, postCheckout]);
+
+  // Discount adjustment Enter handler
+  useEffect(() => {
+    if (editingDiscount) {
+      const handleKey = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const discountValue = parseFloat(customDiscount);
+          if (!isNaN(discountValue) && discountValue > 0) {
+            setEditingDiscount(false);
+          } else {
+            alert('请输入有效折扣倍数（如 0.8 表示8折）');
+          }
+        } else if (e.key === 'Escape') {
+          setEditingDiscount(false);
+          setCustomDiscount('');
+        }
+      };
+      window.addEventListener('keydown', handleKey);
+      return () => window.removeEventListener('keydown', handleKey);
+    }
+  }, [editingDiscount, customDiscount]);
+
+  // Price adjustment Enter handler
+  useEffect(() => {
+    if (editingTotal) {
+      const handleKey = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const totalValue = parseFloat(customTotal);
+          if (!isNaN(totalValue) && totalValue >= 0) {
+            setEditingTotal(false);
+          } else {
+            alert('请输入有效价格');
+          }
+        } else if (e.key === 'Escape') {
+          setEditingTotal(false);
+          setCustomTotal('');
+        }
+      };
+      window.addEventListener('keydown', handleKey);
+      return () => window.removeEventListener('keydown', handleKey);
+    }
+  }, [editingTotal, customTotal]);
 
   return (
     <div className="flex gap-4 lg:gap-6 h-[calc(100vh-96px)] lg:h-[calc(100vh-128px)]">
@@ -819,7 +883,7 @@ function DashboardPage({ products, members, onCheckout }) {
                   onChange={e => setCustomDiscount(e.target.value)}
                   className="w-20 px-2 py-1 border border-orange-400 rounded text-right text-sm font-medium text-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="0.85" autoFocus />
-                <span className="text-xs text-gray-400">如 0.85 表示85折</span>
+                <span className="text-xs text-gray-400">如 0.85 表示85折，回车确认</span>
                 <button onClick={() => { setEditingDiscount(false); setCustomDiscount(''); }}
                   className="text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap">取消</button>
               </div>
@@ -844,6 +908,7 @@ function DashboardPage({ products, members, onCheckout }) {
                   onChange={e => setCustomTotal(e.target.value)}
                   className="flex-1 px-2 py-1 border border-blue-400 rounded text-right text-lg font-bold text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="0.00" autoFocus />
+                <span className="text-xs text-gray-400 whitespace-nowrap">回车确认</span>
                 <button onClick={() => { setEditingTotal(false); setCustomTotal(''); }}
                   className="text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap">取消</button>
               </div>
@@ -889,13 +954,14 @@ function DashboardPage({ products, members, onCheckout }) {
                 </button>
               </div>
               <div className="grid grid-cols-4 gap-1.5">
-                {PAYMENT_METHODS.map(pm => {
+                {PAYMENT_METHODS.map((pm, idx) => {
                   const PmIcon = pm.icon;
                   const active = paymentMethod === pm.id;
                   return (
                     <button key={pm.id} onClick={() => setPaymentMethod(pm.id)}
-                      className={"flex flex-col items-center gap-0.5 py-1.5 rounded-lg border text-xs transition-all " +
+                      className={"flex flex-col items-center gap-0.5 py-1.5 rounded-lg border text-xs transition-all relative " +
                         (active ? pm.bg + " " + pm.border + " " + pm.color + " border-2 font-medium" : "border-gray-200 text-gray-500 hover:bg-gray-50")}>
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-gray-600 text-white text-[9px] rounded-full flex items-center justify-center font-bold">{idx + 1}</span>
                       <PmIcon className="w-4 h-4" />
                       <span>{pm.name.slice(0, 2)}</span>
                     </button>
@@ -905,7 +971,7 @@ function DashboardPage({ products, members, onCheckout }) {
             </div>
             <button onClick={checkout}
               className="w-full py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 font-medium">
-              <CheckIcon className="w-4 h-4" /> 结账 (F9)
+              <CheckIcon className="w-4 h-4" /> 结账 (Enter)
             </button>
           </div>
         )}
@@ -934,7 +1000,7 @@ function DashboardPage({ products, members, onCheckout }) {
                   <span className="font-bold text-green-600 text-lg">¥{fmt(lastChange)}</span>
                 </div>
               )}
-              <button onClick={() => setShowCashDrawer(false)}
+              <button onClick={() => { setShowCashDrawer(false); setPostCheckout(false); }}
                 className="w-full py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium mt-2">
                 关闭钱箱 (Enter)
               </button>

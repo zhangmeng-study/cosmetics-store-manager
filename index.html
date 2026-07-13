@@ -478,11 +478,14 @@ const SHORTCUTS = [{
   key: 'F2',
   desc: '搜索会员'
 }, {
+  key: '1-4',
+  desc: '选择支付方式（微信/支付宝/信用卡/现金）'
+}, {
   key: 'Enter',
-  desc: '打开/关闭钱箱'
+  desc: '结账 / 关闭钱箱'
 }, {
   key: 'F9',
-  desc: '结账'
+  desc: '结账（备选）'
 }, {
   key: 'Esc',
   desc: '关闭弹窗/取消编辑'
@@ -980,6 +983,7 @@ function DashboardPage({
   const [showCashDrawer, setShowCashDrawer] = useState(false);
   const [lastChange, setLastChange] = useState(0);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [postCheckout, setPostCheckout] = useState(false); // true after checkout, waiting for Enter to close drawer
   const memberSearchRef = useRef(null);
   const barcodeRef = useRef(null);
   const filtered = useMemo(() => {
@@ -1098,6 +1102,7 @@ function DashboardPage({
     });
     setLastChange(change);
     setShowCashDrawer(true);
+    setPostCheckout(true);
     setCart([]);
     setMemberId('');
     setEditingTotal(false);
@@ -1117,17 +1122,32 @@ function DashboardPage({
   // 快捷键处理
   useEffect(() => {
     const handleKeyDown = e => {
+      const tag = document.activeElement?.tagName;
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
       if (e.key === 'F1') {
         e.preventDefault();
         setShowShortcuts(true);
       } else if (e.key === 'F2') {
         e.preventDefault();
         memberSearchRef.current?.focus();
-      } else if (e.key === 'Enter') {
-        const tag = document.activeElement?.tagName;
-        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+      } else if (e.key === 'Enter' && !isInput) {
+        e.preventDefault();
+        if (postCheckout) {
+          // Second Enter after checkout: close cash drawer
+          setShowCashDrawer(false);
+          setPostCheckout(false);
+        } else if (cart.length > 0) {
+          // First Enter: trigger checkout
+          checkout();
+        }
+      } else if (!isInput) {
+        // Number keys 1-4 for payment methods (only when not in input)
+        if (e.key >= '1' && e.key <= '4') {
           e.preventDefault();
-          setShowCashDrawer(v => !v);
+          const idx = parseInt(e.key) - 1;
+          if (idx < PAYMENT_METHODS.length) {
+            setPaymentMethod(PAYMENT_METHODS[idx].id);
+          }
         }
       } else if (e.key === 'F9') {
         e.preventDefault();
@@ -1135,6 +1155,7 @@ function DashboardPage({
       } else if (e.key === 'Escape') {
         setShowShortcuts(false);
         setShowCashDrawer(false);
+        setPostCheckout(false);
         setEditingDiscount(false);
         setCustomDiscount('');
         setEditingTotal(false);
@@ -1143,7 +1164,51 @@ function DashboardPage({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart.length, paymentMethod, receivedAmount, finalTotal, change, memberId]);
+  }, [cart.length, paymentMethod, receivedAmount, finalTotal, change, memberId, postCheckout]);
+
+  // Discount adjustment Enter handler
+  useEffect(() => {
+    if (editingDiscount) {
+      const handleKey = e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const discountValue = parseFloat(customDiscount);
+          if (!isNaN(discountValue) && discountValue > 0) {
+            setEditingDiscount(false);
+          } else {
+            alert('请输入有效折扣倍数（如 0.8 表示8折）');
+          }
+        } else if (e.key === 'Escape') {
+          setEditingDiscount(false);
+          setCustomDiscount('');
+        }
+      };
+      window.addEventListener('keydown', handleKey);
+      return () => window.removeEventListener('keydown', handleKey);
+    }
+  }, [editingDiscount, customDiscount]);
+
+  // Price adjustment Enter handler
+  useEffect(() => {
+    if (editingTotal) {
+      const handleKey = e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const totalValue = parseFloat(customTotal);
+          if (!isNaN(totalValue) && totalValue >= 0) {
+            setEditingTotal(false);
+          } else {
+            alert('请输入有效价格');
+          }
+        } else if (e.key === 'Escape') {
+          setEditingTotal(false);
+          setCustomTotal('');
+        }
+      };
+      window.addEventListener('keydown', handleKey);
+      return () => window.removeEventListener('keydown', handleKey);
+    }
+  }, [editingTotal, customTotal]);
   return /*#__PURE__*/React.createElement("div", {
     className: "flex gap-4 lg:gap-6 h-[calc(100vh-96px)] lg:h-[calc(100vh-128px)]"
   }, /*#__PURE__*/React.createElement("div", {
@@ -1371,7 +1436,7 @@ function DashboardPage({
     autoFocus: true
   }), /*#__PURE__*/React.createElement("span", {
     className: "text-xs text-gray-400"
-  }, "\u5982 0.85 \u8868\u793A85\u6298"), /*#__PURE__*/React.createElement("button", {
+  }, "\u5982 0.85 \u8868\u793A85\u6298\uFF0C\u56DE\u8F66\u786E\u8BA4"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setEditingDiscount(false);
       setCustomDiscount('');
@@ -1407,7 +1472,9 @@ function DashboardPage({
     className: "flex-1 px-2 py-1 border border-blue-400 rounded text-right text-lg font-bold text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500",
     placeholder: "0.00",
     autoFocus: true
-  }), /*#__PURE__*/React.createElement("button", {
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "text-xs text-gray-400 whitespace-nowrap"
+  }, "\u56DE\u8F66\u786E\u8BA4"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setEditingTotal(false);
       setCustomTotal('');
@@ -1470,14 +1537,16 @@ function DashboardPage({
     className: "w-3 h-3"
   }), " \u94B1\u7BB1")), /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-4 gap-1.5"
-  }, PAYMENT_METHODS.map(pm => {
+  }, PAYMENT_METHODS.map((pm, idx) => {
     const PmIcon = pm.icon;
     const active = paymentMethod === pm.id;
     return /*#__PURE__*/React.createElement("button", {
       key: pm.id,
       onClick: () => setPaymentMethod(pm.id),
-      className: "flex flex-col items-center gap-0.5 py-1.5 rounded-lg border text-xs transition-all " + (active ? pm.bg + " " + pm.border + " " + pm.color + " border-2 font-medium" : "border-gray-200 text-gray-500 hover:bg-gray-50")
-    }, /*#__PURE__*/React.createElement(PmIcon, {
+      className: "flex flex-col items-center gap-0.5 py-1.5 rounded-lg border text-xs transition-all relative " + (active ? pm.bg + " " + pm.border + " " + pm.color + " border-2 font-medium" : "border-gray-200 text-gray-500 hover:bg-gray-50")
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "absolute -top-1 -right-1 w-4 h-4 bg-gray-600 text-white text-[9px] rounded-full flex items-center justify-center font-bold"
+    }, idx + 1), /*#__PURE__*/React.createElement(PmIcon, {
       className: "w-4 h-4"
     }), /*#__PURE__*/React.createElement("span", null, pm.name.slice(0, 2)));
   }))), /*#__PURE__*/React.createElement("button", {
@@ -1485,7 +1554,7 @@ function DashboardPage({
     className: "w-full py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 font-medium"
   }, /*#__PURE__*/React.createElement(CheckIcon, {
     className: "w-4 h-4"
-  }), " \u7ED3\u8D26 (F9)"))), showScan && /*#__PURE__*/React.createElement(ScanModal, {
+  }), " \u7ED3\u8D26 (Enter)"))), showScan && /*#__PURE__*/React.createElement(ScanModal, {
     onScan: handleCameraScan,
     onClose: () => setShowScan(false)
   }), showCashDrawer && /*#__PURE__*/React.createElement("div", {
@@ -1523,7 +1592,10 @@ function DashboardPage({
   }, "\u627E\u96F6"), /*#__PURE__*/React.createElement("span", {
     className: "font-bold text-green-600 text-lg"
   }, "\xA5", fmt(lastChange))), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowCashDrawer(false),
+    onClick: () => {
+      setShowCashDrawer(false);
+      setPostCheckout(false);
+    },
     className: "w-full py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium mt-2"
   }, "\u5173\u95ED\u94B1\u7BB1 (Enter)")))), showShortcuts && /*#__PURE__*/React.createElement(Modal, {
     title: "\u5FEB\u6377\u952E\u5E2E\u52A9",
