@@ -487,6 +487,15 @@ const SHORTCUTS = [{
   key: 'Ctrl+R',
   desc: '聚焦收款金额输入框（备选）'
 }, {
+  key: 'F5',
+  desc: '编辑折扣'
+}, {
+  key: 'F6',
+  desc: '修改总价'
+}, {
+  key: '+/-',
+  desc: '购物车最后一项数量增减'
+}, {
   key: '1-4',
   desc: '选择支付方式（微信/支付宝/信用卡/现金）'
 }, {
@@ -1172,6 +1181,14 @@ function DashboardPage({
         e.preventDefault();
         receivedAmountRef.current?.focus();
         receivedAmountRef.current?.select();
+      } else if (e.key === 'F5') {
+        e.preventDefault();
+        setEditingDiscount(true);
+        setCustomDiscount(String(discount));
+      } else if (e.key === 'F6') {
+        e.preventDefault();
+        setEditingTotal(true);
+        setCustomTotal(String(calculatedTotal.toFixed(2)));
       } else if (e.key === 'Enter' && !isInput) {
         e.preventDefault();
         if (postCheckout) {
@@ -1182,13 +1199,27 @@ function DashboardPage({
           // First Enter: trigger checkout
           checkout();
         }
-      } else if (!isInput) {
+      } else if (!isInput && cart.length > 0) {
         // Number keys 1-4 for payment methods (only when not in any input field)
         if (e.key >= '1' && e.key <= '4') {
           e.preventDefault();
           const idx = parseInt(e.key) - 1;
           if (idx < PAYMENT_METHODS.length) {
             setPaymentMethod(PAYMENT_METHODS[idx].id);
+          }
+        }
+        // +/- for last cart item quantity adjustment
+        else if (e.key === '+' || e.key === '=') {
+          e.preventDefault();
+          const lastItem = cart[cart.length - 1];
+          if (lastItem && lastItem.qty < (lastItem.stock || 0)) {
+            updateQty(lastItem.id, 1);
+          }
+        } else if (e.key === '-' || e.key === '_') {
+          e.preventDefault();
+          const lastItem = cart[cart.length - 1];
+          if (lastItem && lastItem.qty > 1) {
+            updateQty(lastItem.id, -1);
           }
         }
       } else if (e.key === 'F9') {
