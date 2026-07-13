@@ -67,6 +67,21 @@ const ScanIcon = (props) => (
 const CameraIcon = (props) => (
   <Icon {...props}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></Icon>
 );
+const WechatIcon = (props) => (
+  <Icon {...props}><path d="M9.5 4C5.36 4 2 6.69 2 10c0 1.89 1.08 3.56 2.78 4.66L4 17l2.5-1.18C7.55 16.27 8.5 16.5 9.5 16.5c.17 0 .33 0 .5-.02C9.68 15.84 9.5 15.18 9.5 14.5c0-3.59 3.36-6.5 7.5-6.5.17 0 .33.01.5.02C16.93 5.73 13.46 4 9.5 4z" /><path d="M22 14.5c0-2.49-2.69-4.5-6-4.5s-6 2.01-6 4.5 2.69 4.5 6 4.5c.78 0 1.53-.12 2.22-.34L20.5 20l-.6-2.05C21.23 17.11 22 15.89 22 14.5z" /></Icon>
+);
+const AlipayIcon = (props) => (
+  <Icon {...props}><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M3 12h18" /><path d="M12 3v18" /><path d="M7 8h2" /><path d="M15 16h2" /></Icon>
+);
+const CardIcon = (props) => (
+  <Icon {...props}><rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /></Icon>
+);
+const LockIcon = (props) => (
+  <Icon {...props}><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></Icon>
+);
+const KeyboardIcon = (props) => (
+  <Icon {...props}><rect x="2" y="4" width="20" height="16" rx="2" /><line x1="6" y1="8" x2="6.01" y2="8" /><line x1="10" y1="8" x2="10.01" y2="8" /><line x1="14" y1="8" x2="14.01" y2="8" /><line x1="18" y1="8" x2="18.01" y2="8" /><line x1="6" y1="12" x2="6.01" y2="12" /><line x1="10" y1="12" x2="10.01" y2="12" /><line x1="14" y1="12" x2="14.01" y2="12" /><line x1="18" y1="12" x2="18.01" y2="12" /><line x1="8" y1="16" x2="16" y2="16" /></Icon>
+);
 
 // ===== 常量 =====
 const CATEGORIES = [
@@ -90,6 +105,21 @@ const NAV_TABS = [
   { id: 'products', name: '商品管理', icon: BoxIcon },
   { id: 'members', name: '会员管理', icon: UsersIcon },
   { id: 'stats', name: '营业统计', icon: ChartIcon },
+];
+
+const PAYMENT_METHODS = [
+  { id: 'wechat', name: '微信支付', icon: WechatIcon, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-400' },
+  { id: 'alipay', name: '支付宝', icon: AlipayIcon, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-400' },
+  { id: 'card', name: '信用卡', icon: CardIcon, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-400' },
+  { id: 'cash', name: '现金', icon: MoneyIcon, color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-400' },
+];
+
+const SHORTCUTS = [
+  { key: 'F1', desc: '显示快捷键帮助' },
+  { key: 'F2', desc: '搜索会员' },
+  { key: 'F3', desc: '打开/关闭钱箱' },
+  { key: 'F9', desc: '结账' },
+  { key: 'Esc', desc: '关闭弹窗/取消编辑' },
 ];
 
 // ===== 工具函数 =====
@@ -446,6 +476,13 @@ function DashboardPage({ products, members, onCheckout }) {
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [customDiscount, setCustomDiscount] = useState('');
   const [receivedAmount, setReceivedAmount] = useState('');
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberSearching, setMemberSearching] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [showCashDrawer, setShowCashDrawer] = useState(false);
+  const [lastChange, setLastChange] = useState(0);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const memberSearchRef = useRef(null);
   const barcodeRef = useRef(null);
 
   const filtered = useMemo(() => {
@@ -524,6 +561,7 @@ function DashboardPage({ products, members, onCheckout }) {
 
   const checkout = () => {
     if (!cart.length) { alert('购物车为空'); return; }
+    const pm = PAYMENT_METHODS.find(p => p.id === paymentMethod);
     onCheckout({
       items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
       memberId: memberId || null,
@@ -532,7 +570,11 @@ function DashboardPage({ products, members, onCheckout }) {
       total: finalTotal,
       memberName: member ? member.name : null,
       levelName: level.name,
+      paymentMethod: paymentMethod,
+      paymentMethodName: pm ? pm.name : '现金',
     });
+    setLastChange(change);
+    setShowCashDrawer(true);
     setCart([]);
     setMemberId('');
     setEditingTotal(false);
@@ -540,13 +582,43 @@ function DashboardPage({ products, members, onCheckout }) {
     setEditingDiscount(false);
     setCustomDiscount('');
     setReceivedAmount('');
+    setPaymentMethod('cash');
+    setMemberSearch('');
   };
 
   const filteredMembers = useMemo(() => {
-    if (!searching || !search.trim()) return [];
-    const q = search.trim().toLowerCase();
-    return members.filter(m => m.name.toLowerCase().includes(q) || (m.phone || '').includes(search.trim()));
-  }, [members, search, searching]);
+    if (!memberSearching || !memberSearch.trim()) return [];
+    const q = memberSearch.trim().toLowerCase();
+    return members.filter(m => m.name.toLowerCase().includes(q) || (m.phone || '').includes(memberSearch.trim()));
+  }, [members, memberSearch, memberSearching]);
+
+  // 快捷键处理
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        setShowShortcuts(true);
+      } else if (e.key === 'F2') {
+        e.preventDefault();
+        memberSearchRef.current?.focus();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        setShowCashDrawer(v => !v);
+      } else if (e.key === 'F9') {
+        e.preventDefault();
+        if (cart.length > 0) checkout();
+      } else if (e.key === 'Escape') {
+        setShowShortcuts(false);
+        setShowCashDrawer(false);
+        setEditingDiscount(false);
+        setCustomDiscount('');
+        setEditingTotal(false);
+        setCustomTotal('');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cart.length, paymentMethod, receivedAmount, finalTotal, change, memberId]);
 
   return (
     <div className="flex gap-4 lg:gap-6 h-[calc(100vh-96px)] lg:h-[calc(100vh-128px)]">
@@ -611,23 +683,9 @@ function DashboardPage({ products, members, onCheckout }) {
         <div className="flex gap-3 mb-4">
           <div className="flex-1 relative">
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input value={search} onChange={e => { setSearch(e.target.value); setSearching(true); }}
-              onBlur={() => setTimeout(() => setSearching(false), 200)}
+            <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="搜索商品名称、品牌或条码..."
               className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            {searching && filteredMembers.length > 0 && (
-              <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
-                <p className="px-3 py-1 text-xs text-gray-400 border-b border-gray-100">会员匹配</p>
-                {filteredMembers.map(m => (
-                  <button key={m.id} onClick={() => { setMemberId(m.id); setSearch(''); setSearching(false); }}
-                    className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors text-sm">
-                    <span className="font-medium">{m.name}</span>
-                    <span className="text-gray-400 ml-2">{m.phone || ''}</span>
-                    <span className="text-gray-400 ml-2">· {getLevel(m.points).name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
@@ -670,6 +728,9 @@ function DashboardPage({ products, members, onCheckout }) {
           <CartIcon className="w-5 h-5 text-blue-600" />
           <h3 className="font-semibold text-gray-800">购物车</h3>
           <span className="ml-auto text-sm text-gray-400">{cart.length} 件</span>
+          <button onClick={() => setShowShortcuts(true)} className="text-gray-400 hover:text-gray-600 ml-1" title="快捷键帮助 (F1)">
+            <KeyboardIcon className="w-4 h-4" />
+          </button>
         </div>
 
         {/* 会员选择 */}
@@ -679,12 +740,34 @@ function DashboardPage({ products, members, onCheckout }) {
               <div>
                 <span className="text-sm font-medium text-gray-700">{member.name}</span>
                 <span className={"ml-2 text-xs px-2 py-0.5 rounded-full " + level.bg + " " + level.color}>{level.name}</span>
+                <span className="ml-2 text-xs text-gray-400">积分 {member.points || 0}</span>
               </div>
-              <button onClick={() => setMemberId('')} className="text-gray-400 hover:text-gray-600"><CloseIcon className="w-4 h-4" /></button>
+              <button onClick={() => { setMemberId(''); setMemberSearch(''); }} className="text-gray-400 hover:text-gray-600"><CloseIcon className="w-4 h-4" /></button>
             </div>
           ) : (
-            <div className="text-sm text-gray-400">
-              {members.length === 0 ? '暂无会员数据' : '搜索或选择会员'}
+            <div className="relative">
+              <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <input ref={memberSearchRef} value={memberSearch}
+                onChange={e => { setMemberSearch(e.target.value); setMemberSearching(true); }}
+                onBlur={() => setTimeout(() => setMemberSearching(false), 200)}
+                onFocus={() => memberSearch.trim() && setMemberSearching(true)}
+                placeholder={members.length === 0 ? '暂无会员' : '搜索会员 (F2)'}
+                className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              {memberSearching && filteredMembers.length > 0 && (
+                <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-40 overflow-y-auto">
+                  {filteredMembers.map(m => {
+                    const lv = getLevel(m.points);
+                    return (
+                      <button key={m.id} onClick={() => { setMemberId(m.id); setMemberSearch(''); setMemberSearching(false); }}
+                        className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors text-sm border-b border-gray-50 last:border-0">
+                        <span className="font-medium">{m.name}</span>
+                        <span className="text-gray-400 ml-2">{m.phone || ''}</span>
+                        <span className={"ml-2 text-xs px-1.5 py-0.5 rounded-full " + lv.bg + " " + lv.color}>{lv.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -787,14 +870,84 @@ function DashboardPage({ products, members, onCheckout }) {
                 <span className="font-semibold text-red-500 text-base">¥{fmt(finalTotal - (parseFloat(receivedAmount) || 0))}</span>
               </div>
             )}
+            {/* 支付方式 */}
+            <div className="pt-2 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-sm text-gray-500">支付方式</span>
+                <button onClick={() => setShowCashDrawer(v => !v)}
+                  className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1" title="打开钱箱 (F3)">
+                  <BoxIcon className="w-3 h-3" /> 钱箱
+                </button>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {PAYMENT_METHODS.map(pm => {
+                  const PmIcon = pm.icon;
+                  const active = paymentMethod === pm.id;
+                  return (
+                    <button key={pm.id} onClick={() => setPaymentMethod(pm.id)}
+                      className={"flex flex-col items-center gap-0.5 py-1.5 rounded-lg border text-xs transition-all " +
+                        (active ? pm.bg + " " + pm.border + " " + pm.color + " border-2 font-medium" : "border-gray-200 text-gray-500 hover:bg-gray-50")}>
+                      <PmIcon className="w-4 h-4" />
+                      <span>{pm.name.slice(0, 2)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <button onClick={checkout}
               className="w-full py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 font-medium">
-              <CheckIcon className="w-4 h-4" /> 结账
+              <CheckIcon className="w-4 h-4" /> 结账 (F9)
             </button>
           </div>
         )}
       </div>
       {showScan && <ScanModal onScan={handleCameraScan} onClose={() => setShowScan(false)} />}
+      {showCashDrawer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={() => setShowCashDrawer(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-gray-700 to-gray-900 px-6 py-4 text-white text-center">
+              <BoxIcon className="w-10 h-10 mx-auto mb-2 opacity-80" />
+              <h3 className="text-lg font-bold">钱箱已打开</h3>
+              <p className="text-sm text-gray-300 mt-1">{new Date().toLocaleString('zh-CN')}</p>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">支付方式</span>
+                <span className="font-medium text-gray-700">{PAYMENT_METHODS.find(p => p.id === paymentMethod)?.name || '现金'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">应收金额</span>
+                <span className="font-bold text-blue-600 text-lg">¥{fmt(finalTotal || 0)}</span>
+              </div>
+              {lastChange > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">找零</span>
+                  <span className="font-bold text-green-600 text-lg">¥{fmt(lastChange)}</span>
+                </div>
+              )}
+              <button onClick={() => setShowCashDrawer(false)}
+                className="w-full py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium mt-2">
+                关闭钱箱 (F3)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showShortcuts && (
+        <Modal title="快捷键帮助" onClose={() => setShowShortcuts(false)}>
+          <div className="space-y-3">
+            {SHORTCUTS.map(s => (
+              <div key={s.key} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                <span className="text-sm text-gray-600">{s.desc}</span>
+                <kbd className="px-3 py-1 bg-gray-100 border border-gray-300 rounded-md text-sm font-mono font-bold text-gray-700 shadow-sm">{s.key}</kbd>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-xs text-blue-700">提示：在收银台页面可使用以上快捷键提高效率。按 Esc 可关闭弹窗或取消编辑状态。</p>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -1373,7 +1526,7 @@ function StatsPage({ sales, products, onDeleteSale }) {
                     <th className="px-4 py-3 text-left font-medium">日期</th>
                     <th className="px-4 py-3 text-left font-medium">商品</th>
                     <th className="px-4 py-3 text-left font-medium">会员</th>
-                    <th className="px-4 py-3 text-left font-medium">等级</th>
+                    <th className="px-4 py-3 text-left font-medium">支付方式</th>
                     <th className="px-4 py-3 text-right font-medium">原价</th>
                     <th className="px-4 py-3 text-right font-medium">实付</th>
                     <th className="px-4 py-3 text-center font-medium">操作</th>
@@ -1387,7 +1540,7 @@ function StatsPage({ sales, products, onDeleteSale }) {
                         {sale.items.map(i => `${i.name}×${i.qty}`).join('，')}
                       </td>
                       <td className="px-4 py-3 text-gray-600">{sale.memberName || '散客'}</td>
-                      <td className="px-4 py-3 text-gray-500">{sale.levelName || '-'}</td>
+                      <td className="px-4 py-3 text-gray-500">{sale.paymentMethodName || '现金'}</td>
                       <td className="px-4 py-3 text-right text-gray-400 line-through">¥{fmt(sale.subtotal)}</td>
                       <td className="px-4 py-3 text-right text-blue-600 font-medium">¥{fmt(sale.total)}</td>
                       <td className="px-4 py-3 text-center">
@@ -1637,6 +1790,83 @@ async function writeBackupFile(handle, products, members, sales, pointsRecords) 
   return filename;
 }
 
+// ===== 登录弹窗 =====
+function LoginModal({ onLogin, onClose }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isRegister, setIsRegister] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!username.trim()) { alert('请输入用户名'); return; }
+    if (!password) { alert('请输入密码'); return; }
+    if (isRegister && password !== confirmPassword) { alert('两次密码不一致'); return; }
+    if (password.length < 4) { alert('密码至少4位'); return; }
+    setLoading(true);
+    const success = await onLogin(username.trim(), password, isRegister);
+    setLoading(false);
+    if (success) onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
+        <div className="absolute top-3/4 right-1/4 w-64 h-64 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" style={{animationDelay: '1s'}}></div>
+      </div>
+      <div className="relative bg-white bg-opacity-95 backdrop-blur-sm rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+        <div className="bg-gradient-to-r from-pink-500 to-purple-600 px-6 py-6 text-center">
+          <div className="w-16 h-16 rounded-full bg-white bg-opacity-20 flex items-center justify-center mx-auto mb-3">
+            <LockIcon className="w-8 h-8 text-white" />
+          </div>
+          <h2 className="text-xl font-bold text-white">美妆门店管理系统</h2>
+          <p className="text-sm text-white text-opacity-80 mt-1">{isRegister ? '创建新账户' : '登录到云端'}</p>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-1">用户名</label>
+            <input value={username} onChange={e => setUsername(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="请输入用户名" autoFocus
+              onKeyDown={e => e.key === 'Enter' && handleSubmit()} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-1">密码</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="请输入密码"
+              onKeyDown={e => e.key === 'Enter' && handleSubmit()} />
+          </div>
+          {isRegister && (
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1">确认密码</label>
+              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="再次输入密码"
+                onKeyDown={e => e.key === 'Enter' && handleSubmit()} />
+            </div>
+          )}
+          <button onClick={handleSubmit} disabled={loading}
+            className="w-full py-2.5 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg hover:from-pink-600 hover:to-purple-700 transition-all font-medium disabled:opacity-50">
+            {loading ? '处理中...' : (isRegister ? '注册' : '登录')}
+          </button>
+          <div className="text-center">
+            <button onClick={() => { setIsRegister(!isRegister); setConfirmPassword(''); }}
+              className="text-sm text-purple-600 hover:text-purple-800 transition-colors">
+              {isRegister ? '已有账户？点击登录' : '没有账户？点击注册'}
+            </button>
+          </div>
+          <button onClick={onClose}
+            className="w-full py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
+            暂不登录，继续使用本地数据
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ===== 主组件 =====
 function App() {
   const [tab, setTab] = useState('pos');
@@ -1650,6 +1880,10 @@ function App() {
   const [backupDirName, setBackupDirName] = useState('');
   const [lastBackupTime, setLastBackupTime] = useState('');
   const [backingUp, setBackingUp] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [showLogin, setShowLogin] = useState(false);
+  const [scheduledBackupEnabled, setScheduledBackupEnabled] = useState(false);
 
   // 初始化：从 IndexedDB 加载数据 + 请求永久存储
   useEffect(() => {
@@ -1671,6 +1905,95 @@ function App() {
     })();
     return () => clearTimeout(timer);
   }, []);
+
+  // 登录状态检查 + 定时备份
+  useEffect(() => {
+    if (loading) return;
+    // 检查登录状态
+    (async () => {
+      try {
+        const user = await metaGet('currentUser');
+        if (user) {
+          setIsLoggedIn(true);
+          setCurrentUser(user);
+        }
+        const backupSetting = await metaGet('scheduledBackup');
+        if (backupSetting) setScheduledBackupEnabled(true);
+      } catch (e) { /* 忽略 */ }
+    })();
+  }, [loading]);
+
+  // 定时备份：每日22点自动备份
+  useEffect(() => {
+    if (loading || !scheduledBackupEnabled) return;
+    let lastRunDate = '';
+    const checkBackup = async () => {
+      const now = new Date();
+      if (now.getHours() === 22 && now.getMinutes() === 0 && lastRunDate !== todayStr()) {
+        lastRunDate = todayStr();
+        try {
+          const handle = await getBackupDirHandle();
+          if (handle) {
+            const ok = await verifyDirPermission(handle);
+            if (ok) {
+              const filename = await writeBackupFile(handle, products, members, sales, pointsRecords);
+              console.log('定时备份完成:', filename);
+            }
+          }
+        } catch (e) {
+          console.warn('定时备份失败:', e);
+        }
+      }
+    };
+    const timer = setInterval(checkBackup, 60000);
+    return () => clearInterval(timer);
+  }, [loading, scheduledBackupEnabled, products, members, sales, pointsRecords]);
+
+  // 登录/注册
+  const handleLogin = async (username, password, isRegister) => {
+    try {
+      const msgBuffer = new TextEncoder().encode(password);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      if (isRegister) {
+        const existing = await metaGet('user_' + username);
+        if (existing) { showToast('用户名已存在'); return false; }
+        const user = { username, passwordHash: hashHex, createdAt: new Date().toISOString() };
+        await metaSet('user_' + username, user);
+        await metaSet('currentUser', user);
+        setIsLoggedIn(true);
+        setCurrentUser(user);
+        showToast('注册成功，欢迎 ' + username);
+        return true;
+      } else {
+        const user = await metaGet('user_' + username);
+        if (!user || user.passwordHash !== hashHex) { showToast('用户名或密码错误'); return false; }
+        await metaSet('currentUser', user);
+        setIsLoggedIn(true);
+        setCurrentUser(user);
+        showToast('登录成功，欢迎 ' + username);
+        return true;
+      }
+    } catch (e) {
+      showToast('登录失败: ' + e.message);
+      return false;
+    }
+  };
+
+  const handleLogout = async () => {
+    await metaSet('currentUser', null);
+    setIsLoggedIn(false);
+    setCurrentUser(null);
+    showToast('已退出登录');
+  };
+
+  const toggleScheduledBackup = async () => {
+    const newVal = !scheduledBackupEnabled;
+    setScheduledBackupEnabled(newVal);
+    await metaSet('scheduledBackup', newVal);
+    showToast(newVal ? '已开启每日22:00自动备份' : '已关闭定时备份');
+  };
 
   // 加载备份设置 + 自动备份
   useEffect(() => {
@@ -2041,6 +2364,30 @@ function App() {
                 <span className="hidden lg:inline">备份</span>
               </button>
             )}
+            <button onClick={toggleScheduledBackup}
+              className={"flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm border rounded-lg transition-colors whitespace-nowrap " +
+                (scheduledBackupEnabled ? "text-teal-700 border-teal-300 hover:bg-teal-50" : "text-gray-600 border-gray-300 hover:bg-gray-50")}
+              title={scheduledBackupEnabled ? "每日22:00自动备份已开启" : "开启每日22:00自动备份"}>
+              <span className={"w-2 h-2 rounded-full " + (scheduledBackupEnabled ? "bg-teal-400" : "bg-gray-300")} />
+              <span className="hidden lg:inline">{scheduledBackupEnabled ? '定时✓' : '定时'}</span>
+            </button>
+            <div className="w-px h-5 bg-gray-200 mx-0.5 hidden lg:block" />
+            {isLoggedIn ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-500 hidden lg:inline">{currentUser?.username}</span>
+                <button onClick={handleLogout}
+                  className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
+                  title="退出登录">
+                  <LockIcon className="w-3.5 h-3.5" /> <span className="hidden lg:inline">退出</span>
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setShowLogin(true)}
+                className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-purple-600 border border-purple-300 rounded-lg hover:bg-purple-50 transition-colors whitespace-nowrap"
+                title="登录云端账户">
+                <LockIcon className="w-3.5 h-3.5" /> <span className="hidden lg:inline">登录</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -2061,6 +2408,11 @@ function App() {
           </>
         )}
       </main>
+
+      {/* 登录弹窗 */}
+      {showLogin && (
+        <LoginModal onLogin={handleLogin} onClose={() => setShowLogin(false)} />
+      )}
 
       {/* Toast 提示 */}
       {toast && (
