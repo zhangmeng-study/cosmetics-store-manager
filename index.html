@@ -3247,25 +3247,44 @@ function App() {
     const finish = () => {
       if (!done) {
         done = true;
+        console.log('Loading complete, setting loading=false');
         setLoading(false);
       }
     };
-    const timer = setTimeout(finish, 3000); // 安全兜底：3秒后强制完成
+    const timer = setTimeout(() => {
+      console.warn('Loading timeout - forcing finish after 3 seconds');
+      finish();
+    }, 3000); // 安全兜底：3秒后强制完成
     (async () => {
-      await requestPersistentStorage();
       try {
+        await requestPersistentStorage();
+      } catch (e) {
+        console.warn('requestPersistentStorage failed:', e.message);
+      }
+      try {
+        console.log('Starting to load data from IndexedDB...');
         const [p, m, s, r] = await Promise.all([dbGetAll('products'), dbGetAll('members'), dbGetAll('sales'), dbGetAll('pointsRecords')]);
+        console.log('Data loaded:', {
+          products: p.length,
+          members: m.length,
+          sales: s.length,
+          pointsRecords: r.length
+        });
         setProducts(p);
         setMembers(m);
         setSales(s);
         setPointsRecords(r);
       } catch (e) {
         console.error('加载数据失败', e);
+        console.error('Error details:', e.message, e.stack);
       }
       clearTimeout(timer);
       finish();
     })();
-    return () => clearTimeout(timer);
+    return () => {
+      console.log('Cleanup: clearing timer');
+      clearTimeout(timer);
+    };
   }, []);
 
   // 登录状态检查 + 定时备份
