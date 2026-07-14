@@ -1306,6 +1306,15 @@ function DashboardPage({
         // Show current effective total (confirmed or calculated)
         const currentTotal = confirmedTotal !== null ? confirmedTotal : calculatedTotal;
         setCustomTotal(String(currentTotal.toFixed(2)));
+      } else if (e.key === 'Enter' && editingItemId) {
+        // Confirm item edit (works even when input is focused in modal)
+        e.preventDefault();
+        confirmItemPrice();
+        confirmItemDiscount();
+      } else if (e.key === 'Escape' && editingItemId) {
+        // Close item edit modal (works even when input is focused in modal)
+        e.preventDefault();
+        closeItemEdit();
       } else if (e.key === 'Enter' && !isInput && !editingDiscount && !editingTotal) {
         e.preventDefault();
         if (postCheckout) {
@@ -1349,26 +1358,18 @@ function DashboardPage({
         e.preventDefault();
         if (cart.length > 0) checkout();
       } else if (e.key === 'Escape') {
-        if (editingItemId) {
-          closeItemEdit();
-        } else {
-          setShowShortcuts(false);
-          setShowCashDrawer(false);
-          setPostCheckout(false);
-          setEditingDiscount(false);
-          setCustomDiscount('');
-          setConfirmedDiscount(null);
-          setEditingTotal(false);
-          setCustomTotal('');
-          setConfirmedTotal(null);
-          setShowProductSearchModal(false);
-          setSearch('');
-          setSelectedProductIndex(0);
-        }
-      } else if (e.key === 'Enter' && editingItemId) {
-        e.preventDefault();
-        confirmItemPrice();
-        confirmItemDiscount();
+        setShowShortcuts(false);
+        setShowCashDrawer(false);
+        setPostCheckout(false);
+        setEditingDiscount(false);
+        setCustomDiscount('');
+        setConfirmedDiscount(null);
+        setEditingTotal(false);
+        setCustomTotal('');
+        setConfirmedTotal(null);
+        setShowProductSearchModal(false);
+        setSearch('');
+        setSelectedProductIndex(0);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
