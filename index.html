@@ -2101,6 +2101,7 @@ function DashboardPage({
       value: itemCustomPrices[editingItemId] !== undefined ? itemCustomPrices[editingItemId] : '',
       onChange: e => updateItemCustomPrice(e.target.value),
       placeholder: currentPrice.toFixed(2),
+      autoFocus: true,
       className: "flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-right font-medium"
     })), itemCustomPrices[editingItemId] && /*#__PURE__*/React.createElement("p", {
       className: "text-xs text-blue-500 mt-1"
