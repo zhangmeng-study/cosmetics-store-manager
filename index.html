@@ -500,6 +500,9 @@ const SHORTCUTS = [{
   key: 'F6',
   desc: '修改总价'
 }, {
+  key: 'F7',
+  desc: '编辑购物车最后一项的价格/折扣'
+}, {
   key: '+/-',
   desc: '购物车最后一项数量增减'
 }, {
@@ -1336,27 +1339,41 @@ function DashboardPage({
             updateQty(lastItem.id, -1);
           }
         }
+      } else if (e.key === 'F7') {
+        e.preventDefault();
+        // Open item edit modal for last cart item
+        if (cart.length > 0) {
+          openItemEdit(cart[cart.length - 1].id);
+        }
       } else if (e.key === 'F9') {
         e.preventDefault();
         if (cart.length > 0) checkout();
       } else if (e.key === 'Escape') {
-        setShowShortcuts(false);
-        setShowCashDrawer(false);
-        setPostCheckout(false);
-        setEditingDiscount(false);
-        setCustomDiscount('');
-        setConfirmedDiscount(null); // Reset confirmed discount on cancel
-        setEditingTotal(false);
-        setCustomTotal('');
-        setConfirmedTotal(null); // Reset confirmed total on cancel
-        setShowProductSearchModal(false);
-        setSearch('');
-        setSelectedProductIndex(0);
+        if (editingItemId) {
+          closeItemEdit();
+        } else {
+          setShowShortcuts(false);
+          setShowCashDrawer(false);
+          setPostCheckout(false);
+          setEditingDiscount(false);
+          setCustomDiscount('');
+          setConfirmedDiscount(null);
+          setEditingTotal(false);
+          setCustomTotal('');
+          setConfirmedTotal(null);
+          setShowProductSearchModal(false);
+          setSearch('');
+          setSelectedProductIndex(0);
+        }
+      } else if (e.key === 'Enter' && editingItemId) {
+        e.preventDefault();
+        confirmItemPrice();
+        confirmItemDiscount();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart.length, editingDiscount, editingTotal, postCheckout]);
+  }, [cart.length, editingDiscount, editingTotal, postCheckout, editingItemId]);
 
   // Member search modal keyboard navigation
   useEffect(() => {
