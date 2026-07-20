@@ -3080,71 +3080,183 @@ function StatsPage({
   }), " \u9000\u8D27"))))))))));
 }
 
-// ===== IndexedDB 持久化存储 =====
-const DB_NAME = 'cosmetics_store';
-const DB_VERSION = 1;
-const DB_STORES = ['products', 'members', 'sales', 'pointsRecords'];
-function openDB() {
+// ===== SQLite 本地数据库（sql.js）=====
+// 主存储使用 SQLite，IndexedDB 仅用于持久化 SQLite 二进制文件
+const SQL_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js';
+const SQL_JS_WASM = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/';
+const PERSIST_DB_NAME = 'cosmetics_store_sqlite';
+const PERSIST_STORE = 'sqlite_db';
+
+// 加载 sql.js 脚本
+function loadSqlJsScript() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    if (document.querySelector('script[src="' + SQL_JS_CDN + '"]')) return resolve();
+    const s = document.createElement('script');
+    s.src = SQL_JS_CDN;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('sql.js 加载失败'));
+    document.head.appendChild(s);
+  });
+}
+
+// 初始化 SQL 引擎
+async function initSqlJsEngine() {
+  await loadSqlJsScript();
+  return await window.initSqlJs({
+    locateFile: f => SQL_JS_WASM + f
+  });
+}
+
+// IndexedDB 持久化层（仅存储 SQLite 二进制）
+function openPersistDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(PERSIST_DB_NAME, 1);
     req.onupgradeneeded = e => {
       const db = e.target.result;
-      DB_STORES.forEach(s => {
-        if (!db.objectStoreNames.contains(s)) {
-          db.createObjectStore(s, {
-            keyPath: 'id'
-          });
-        }
-      });
+      if (!db.objectStoreNames.contains(PERSIST_STORE)) {
+        db.createObjectStore(PERSIST_STORE);
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
-async function dbGetAll(storeName) {
-  const db = await openDB();
+async function persistSave(dbBytes) {
+  const db = await openPersistDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readonly');
-    const req = tx.objectStore(storeName).getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
-}
-async function dbPutAll(storeName, items) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readwrite');
-    const store = tx.objectStore(storeName);
-    store.clear();
-    items.forEach(item => store.put(item));
+    const tx = db.transaction(PERSIST_STORE, 'readwrite');
+    tx.objectStore(PERSIST_STORE).put(dbBytes, 'main');
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
+async function persistLoad() {
+  const db = await openPersistDB();
+  return new Promise(resolve => {
+    const tx = db.transaction(PERSIST_STORE, 'readonly');
+    const req = tx.objectStore(PERSIST_STORE).get('main');
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => resolve(null);
+  });
+}
 
-// 请求永久存储（防止浏览器自动清理）
+// 创建数据库表结构
+function createTables(db) {
+  db.run(`CREATE TABLE IF NOT EXISTS products (
+    id TEXT PRIMARY KEY, name TEXT, barcode TEXT, brand TEXT,
+    category TEXT, price REAL, stock INTEGER, cost REAL, sku TEXT, createdAt TEXT
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS members (
+    id TEXT PRIMARY KEY, name TEXT, phone TEXT, birthday TEXT,
+    address TEXT, points INTEGER, createdAt TEXT
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS sales (
+    id TEXT PRIMARY KEY, date TEXT, createdAt TEXT, itemsJson TEXT,
+    subtotal REAL, total REAL, memberId TEXT, memberName TEXT, levelName TEXT
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS points_records (
+    id TEXT PRIMARY KEY, memberId TEXT, memberName TEXT,
+    points INTEGER, type TEXT, description TEXT, date TEXT, createdAt TEXT
+  )`);
+}
+
+// 全局 SQLite 数据库实例
+let sqlDb = null;
+let sqlEngine = null;
+let saveTimer = null;
+
+// 初始化 SQLite 数据库
+async function initSQLiteDB() {
+  sqlEngine = await initSqlJsEngine();
+  const savedBytes = await persistLoad();
+  if (savedBytes) {
+    sqlDb = new sqlEngine.Database(new Uint8Array(savedBytes));
+  } else {
+    sqlDb = new sqlEngine.Database();
+    createTables(sqlDb);
+  }
+  console.log('SQLite 数据库初始化完成');
+}
+
+// 保存 SQLite 到 IndexedDB（防抖，避免频繁写入）
+function schedulePersist() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    if (sqlDb) {
+      const bytes = sqlDb.export();
+      persistSave(bytes).catch(e => console.error('持久化失败:', e));
+    }
+  }, 500);
+}
+
+// 通用查询
+function sqlExec(sql, params) {
+  if (params) {
+    sqlDb.run(sql, params);
+  } else {
+    sqlDb.run(sql);
+  }
+  schedulePersist();
+}
+function sqlQuery(sql, params) {
+  if (params) {
+    return sqlDb.exec(sql, params);
+  }
+  return sqlDb.exec(sql);
+}
+
+// 表名映射：JS camelCase → SQL snake_case
+const TABLE_MAP = {
+  products: 'products',
+  members: 'members',
+  sales: 'sales',
+  pointsRecords: 'points_records'
+};
+
+// CRUD 封装
+const dbGetAll = table => {
+  const sqlTable = TABLE_MAP[table] || table;
+  const result = sqlQuery(`SELECT * FROM ${sqlTable}`);
+  if (!result[0]) return [];
+  return result[0].values.map(row => {
+    const obj = {};
+    result[0].columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+    return obj;
+  });
+};
+const dbPutAll = async (table, items) => {
+  const sqlTable = TABLE_MAP[table] || table;
+  sqlExec(`DELETE FROM ${sqlTable}`);
+  if (items.length === 0) {
+    schedulePersist();
+    return;
+  }
+  const columns = Object.keys(items[0]);
+  const placeholders = columns.map(() => '?').join(',');
+  const stmt = sqlDb.prepare(`INSERT INTO ${sqlTable} (${columns.join(',')}) VALUES (${placeholders})`);
+  items.forEach(item => {
+    stmt.run(columns.map(c => {
+      const v = item[c];
+      return typeof v === 'object' && v !== null ? JSON.stringify(v) : v;
+    }));
+  });
+  stmt.free();
+  schedulePersist();
+};
+
+// 请求永久存储
 async function requestPersistentStorage() {
   if (navigator.storage && navigator.storage.persist) {
     try {
       const isPersisted = await navigator.storage.persisted();
-      if (!isPersisted) {
-        await navigator.storage.persist();
-      }
-    } catch (e) {/* 部分浏览器不支持，忽略 */}
+      if (!isPersisted) await navigator.storage.persist();
+    } catch (e) {/* 忽略 */}
   }
 }
 
-// ===== SQLite 导出/导入 =====
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector('script[src="' + src + '"]')) return resolve();
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('加载失败: ' + src));
-    document.head.appendChild(s);
-  });
-}
+// ===== SQLite 导出/导入（文件备份）=====
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -3155,97 +3267,41 @@ function downloadBlob(blob, filename) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-const SQL_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js';
-const SQL_JS_WASM = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/';
-async function ensureSqlJs() {
-  await loadScript(SQL_JS_CDN);
-  const SQL = await window.initSqlJs({
-    locateFile: f => SQL_JS_WASM + f
-  });
-  return SQL;
-}
-async function exportToSQLite(products, members, sales, pointsRecords) {
-  const SQL = await ensureSqlJs();
-  const db = new SQL.Database();
-  db.run(`CREATE TABLE products (id TEXT PRIMARY KEY, name TEXT, barcode TEXT, brand TEXT, category TEXT, price REAL, stock INTEGER, cost REAL, sku TEXT, createdAt TEXT)`);
-  db.run(`CREATE TABLE members (id TEXT PRIMARY KEY, name TEXT, phone TEXT, birthday TEXT, address TEXT, points INTEGER, createdAt TEXT)`);
-  db.run(`CREATE TABLE sales (id TEXT PRIMARY KEY, date TEXT, createdAt TEXT, itemsJson TEXT, subtotal REAL, total REAL, memberId TEXT, memberName TEXT, levelName TEXT)`);
-  db.run(`CREATE TABLE points_records (id TEXT PRIMARY KEY, memberId TEXT, memberName TEXT, points INTEGER, type TEXT, description TEXT, date TEXT, createdAt TEXT)`);
-  products.forEach(p => {
-    db.run('INSERT INTO products VALUES (?,?,?,?,?,?,?,?,?,?)', [p.id, p.name, p.barcode, p.brand, p.category, p.price, p.stock, p.cost, p.sku, p.createdAt]);
-  });
-  members.forEach(m => {
-    db.run('INSERT INTO members VALUES (?,?,?,?,?,?,?)', [m.id, m.name, m.phone, m.birthday, m.address, m.points, m.createdAt]);
-  });
-  sales.forEach(s => {
-    db.run('INSERT INTO sales VALUES (?,?,?,?,?,?,?,?)', [s.id, s.date, s.createdAt, JSON.stringify(s.items), s.subtotal, s.total, s.memberId, s.memberName, s.levelName]);
-  });
-  pointsRecords.forEach(r => {
-    db.run('INSERT INTO points_records VALUES (?,?,?,?,?,?,?,?)', [r.id, r.memberId, r.memberName, r.points, r.type, r.description, r.date, r.createdAt]);
-  });
-  const data = db.export();
-  db.close();
+async function exportToSQLite() {
+  if (!sqlDb) throw new Error('数据库未初始化');
+  const data = sqlDb.export();
   return new Blob([data], {
     type: 'application/x-sqlite3'
   });
 }
 async function importFromSQLite(file) {
-  const SQL = await ensureSqlJs();
+  const SQL = await initSqlJsEngine();
   const buf = await file.arrayBuffer();
   const db = new SQL.Database(new Uint8Array(buf));
-  const products = [];
+  const products = [],
+    members = [],
+    sales = [],
+    pointsRecords = [];
   db.exec('SELECT * FROM products')[0]?.values.forEach(row => {
-    products.push({
-      id: row[0],
-      name: row[1],
-      barcode: row[2],
-      brand: row[3],
-      category: row[4],
-      price: row[5],
-      stock: row[6],
-      cost: row[7],
-      sku: row[8],
-      createdAt: row[9]
-    });
+    const o = {};
+    db.exec('SELECT * FROM products LIMIT 0')[0].columns.forEach((c, i) => o[c] = row[i]);
+    products.push(o);
   });
-  const members = [];
   db.exec('SELECT * FROM members')[0]?.values.forEach(row => {
-    members.push({
-      id: row[0],
-      name: row[1],
-      phone: row[2],
-      birthday: row[3],
-      address: row[4],
-      points: row[5],
-      createdAt: row[6]
-    });
+    const o = {};
+    db.exec('SELECT * FROM members LIMIT 0')[0].columns.forEach((c, i) => o[c] = row[i]);
+    members.push(o);
   });
-  const sales = [];
   db.exec('SELECT * FROM sales')[0]?.values.forEach(row => {
-    sales.push({
-      id: row[0],
-      date: row[1],
-      createdAt: row[2],
-      items: JSON.parse(row[3] || '[]'),
-      subtotal: row[4],
-      total: row[5],
-      memberId: row[6],
-      memberName: row[7],
-      levelName: row[8]
-    });
+    const o = {};
+    db.exec('SELECT * FROM sales LIMIT 0')[0].columns.forEach((c, i) => o[c] = row[i]);
+    if (o.itemsJson) o.items = JSON.parse(o.itemsJson);
+    sales.push(o);
   });
-  const pointsRecords = [];
   db.exec('SELECT * FROM points_records')[0]?.values.forEach(row => {
-    pointsRecords.push({
-      id: row[0],
-      memberId: row[1],
-      memberName: row[2],
-      points: row[3],
-      type: row[4],
-      description: row[5],
-      date: row[6],
-      createdAt: row[7]
-    });
+    const o = {};
+    db.exec('SELECT * FROM points_records LIMIT 0')[0].columns.forEach((c, i) => o[c] = row[i]);
+    pointsRecords.push(o);
   });
   db.close();
   return {
@@ -3326,7 +3382,7 @@ async function getBackupDirHandle() {
   return await metaGet('backupDirHandle');
 }
 async function writeBackupFile(handle, products, members, sales, pointsRecords) {
-  const blob = await exportToSQLite(products, members, sales, pointsRecords);
+  const blob = await exportToSQLite();
   const now = new Date();
   const ts = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
   const filename = `美妆门店备份_${ts}.sqlite`;
@@ -3481,7 +3537,9 @@ function App() {
         console.warn('requestPersistentStorage failed:', e.message);
       }
       try {
-        console.log('Starting to load data from IndexedDB...');
+        console.log('Initializing SQLite database...');
+        await initSQLiteDB();
+        console.log('SQLite initialized, loading data...');
         const [p, m, s, r] = await Promise.all([dbGetAll('products'), dbGetAll('members'), dbGetAll('sales'), dbGetAll('pointsRecords')]);
         console.log('Data loaded:', {
           products: p.length,
@@ -3697,7 +3755,7 @@ function App() {
   const handleExportDB = async () => {
     try {
       setToast('正在生成数据库文件...');
-      const blob = await exportToSQLite(products, members, sales, pointsRecords);
+      const blob = await exportToSQLite();
       downloadBlob(blob, `美妆门店_${todayStr()}.sqlite`);
       setToast(null);
       showToast('数据库已导出');
