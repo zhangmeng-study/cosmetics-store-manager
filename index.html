@@ -1043,18 +1043,6 @@ function DashboardPage({
   useEffect(() => {
     cartRef.current = cart;
   }, [cart]);
-  useEffect(() => {
-    productsRef.current = products;
-  }, [products]);
-  useEffect(() => {
-    membersRef.current = members;
-  }, [members]);
-  useEffect(() => {
-    salesRef.current = sales;
-  }, [sales]);
-  useEffect(() => {
-    pointsRecordsRef.current = pointsRecords;
-  }, [pointsRecords]);
   // Note: finalTotalRef, changeRef, memberIdRef are initialized with defaults
   // and don't need useEffect sync to avoid TDZ errors
 
@@ -3517,10 +3505,6 @@ function App() {
   const [members, setMembers] = useState([]);
   const [sales, setSales] = useState([]);
   const [pointsRecords, setPointsRecords] = useState([]);
-  const productsRef = useRef(products);
-  const membersRef = useRef(members);
-  const salesRef = useRef(sales);
-  const pointsRecordsRef = useRef(pointsRecords);
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dbBusy, setDbBusy] = useState(false);
