@@ -3175,7 +3175,79 @@ async function initSQLiteDB() {
     sqlDb = new sqlEngine.Database();
     createTables(sqlDb);
   }
+  // 检查 SQLite 是否为空，如果为空则尝试从旧 IndexedDB 迁移
+  const countResult = sqlDb.exec('SELECT COUNT(*) as cnt FROM products');
+  const productCount = countResult[0] && countResult[0].values[0][0] || 0;
+  if (productCount === 0) {
+    await migrateFromOldIndexedDB();
+  }
   console.log('SQLite 数据库初始化完成');
+}
+
+// 从旧版 IndexedDB 迁移数据到 SQLite
+async function migrateFromOldIndexedDB() {
+  const OLD_DB_NAME = 'cosmetics_store';
+  const OLD_DB_VERSION = 1;
+  const STORES = ['products', 'members', 'sales', 'pointsRecords'];
+  try {
+    // 检查旧数据库是否存在
+    const oldDbExists = await new Promise(resolve => {
+      const req = indexedDB.open(OLD_DB_NAME);
+      req.onsuccess = () => {
+        const db = req.result;
+        const hasStores = STORES.every(s => db.objectStoreNames.contains(s));
+        db.close();
+        resolve(hasStores);
+      };
+      req.onerror = () => resolve(false);
+      req.onupgradeneeded = () => {
+        // 如果触发 upgradeneeded，说明数据库不存在或版本不对
+        resolve(false);
+      };
+    });
+    if (!oldDbExists) {
+      console.log('旧版 IndexedDB 不存在，跳过迁移');
+      return;
+    }
+    console.log('检测到旧版 IndexedDB，开始迁移数据...');
+
+    // 打开旧数据库并读取数据
+    const oldDb = await new Promise((resolve, reject) => {
+      const req = indexedDB.open(OLD_DB_NAME, OLD_DB_VERSION);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    const migratedData = {};
+    for (const storeName of STORES) {
+      const items = await new Promise((resolve, reject) => {
+        const tx = oldDb.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
+      migratedData[storeName] = items;
+      console.log(`读取旧数据: ${storeName} ${items.length} 条`);
+    }
+    oldDb.close();
+
+    // 写入 SQLite
+    for (const [storeName, items] of Object.entries(migratedData)) {
+      if (items.length > 0) {
+        await dbPutAll(storeName, items);
+        console.log(`迁移完成: ${storeName} ${items.length} 条`);
+      }
+    }
+
+    // 立即持久化
+    if (sqlDb) {
+      const bytes = sqlDb.export();
+      await persistSave(bytes);
+    }
+    console.log('数据迁移完成！旧版 IndexedDB 数据已导入 SQLite');
+  } catch (e) {
+    console.warn('数据迁移失败（不影响正常使用）:', e.message);
+  }
 }
 
 // 保存 SQLite 到 IndexedDB（防抖，避免频繁写入）
@@ -3239,7 +3311,9 @@ const dbPutAll = async (table, items) => {
   items.forEach(item => {
     stmt.run(columns.map(c => {
       const v = item[c];
-      return typeof v === 'object' && v !== null ? JSON.stringify(v) : v;
+      if (v === undefined || v === null) return null;
+      if (typeof v === 'object') return JSON.stringify(v);
+      return v;
     }));
   });
   stmt.free();
