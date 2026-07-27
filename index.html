@@ -372,6 +372,38 @@ const GridViewIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#_
   width: "7",
   height: "7"
 }));
+const SyncIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("polyline", {
+  points: "23 4 23 10 17 10"
+}), /*#__PURE__*/React.createElement("polyline", {
+  points: "1 20 1 14 7 14"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+}));
+const ServerIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("rect", {
+  x: "2",
+  y: "2",
+  width: "20",
+  height: "8",
+  rx: "2",
+  ry: "2"
+}), /*#__PURE__*/React.createElement("rect", {
+  x: "2",
+  y: "14",
+  width: "20",
+  height: "8",
+  rx: "2",
+  ry: "2"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "6",
+  y1: "6",
+  x2: "6.01",
+  y2: "6"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "6",
+  y1: "18",
+  x2: "6.01",
+  y2: "18"
+}));
 
 // ===== 常量 =====
 const CATEGORIES = [{
@@ -3172,6 +3204,61 @@ function syncToIndexedDB(products, members, sales, pointsRecords) {
   }, 300);
 }
 
+// ===== 局域网同步 =====
+async function pushToServer(serverUrl, data) {
+  const res = await fetch(serverUrl + '/api/data', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      products: data.products,
+      members: data.members,
+      sales: data.sales,
+      pointsRecords: data.pointsRecords
+    })
+  });
+  if (!res.ok) throw new Error('推送数据失败: ' + res.status);
+}
+async function pullFromServer(serverUrl) {
+  const res = await fetch(serverUrl + '/api/data');
+  if (!res.ok) throw new Error('拉取数据失败: ' + res.status);
+  return res.json();
+}
+
+// 合并数据：按 updatedAt 时间戳取较新版本
+function mergeArrays(localArr, serverArr) {
+  const localMap = new Map();
+  for (const item of localArr) localMap.set(item.id, item);
+  const serverMap = new Map();
+  for (const item of serverArr) serverMap.set(item.id, item);
+  const allIds = new Set([...localMap.keys(), ...serverMap.keys()]);
+  const merged = [];
+  for (const id of allIds) {
+    const local = localMap.get(id);
+    const server = serverMap.get(id);
+    if (!local) {
+      merged.push(server);
+      continue;
+    }
+    if (!server) {
+      merged.push(local);
+      continue;
+    }
+    const lt = new Date(local.updatedAt || local.createdAt || 0).getTime();
+    const st = new Date(server.updatedAt || server.createdAt || 0).getTime();
+    merged.push(st >= lt ? server : local);
+  }
+  return merged;
+}
+function arraysEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 // 通用下载
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -3407,6 +3494,103 @@ async function importFromJSON(file) {
   };
 }
 
+// ===== 同步设置弹窗 =====
+function SyncSettingsModal({
+  currentUrl,
+  connected,
+  onSave,
+  onClose
+}) {
+  const [url, setUrl] = useState(currentUrl || '');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const handleTest = async () => {
+    const trimmed = url.trim().replace(/\/+$/, '');
+    if (!trimmed) {
+      setTestResult('error');
+      return;
+    }
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(trimmed + '/api/health');
+      if (res.ok) {
+        setTestResult('success');
+      } else {
+        setTestResult('error');
+      }
+    } catch (e) {
+      setTestResult('error');
+    }
+    setTesting(false);
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "fixed inset-0 bg-black/50 flex items-center justify-center z-50",
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-indigo-50 to-blue-50"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement(ServerIcon, {
+    className: "w-5 h-5 text-indigo-600"
+  }), /*#__PURE__*/React.createElement("h2", {
+    className: "text-lg font-bold text-gray-800"
+  }, "\u5C40\u57DF\u7F51\u540C\u6B65\u8BBE\u7F6E")), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    className: "text-gray-400 hover:text-gray-600"
+  }, /*#__PURE__*/React.createElement(CloseIcon, {
+    className: "w-5 h-5"
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "p-6 space-y-4"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    className: "block text-sm font-medium text-gray-700 mb-1"
+  }, "\u540C\u6B65\u670D\u52A1\u5668\u5730\u5740"), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: url,
+    onChange: e => {
+      setUrl(e.target.value);
+      setTestResult(null);
+    },
+    placeholder: "\u4F8B\u5982: http://192.168.1.100:3800",
+    className: "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none",
+    autoFocus: true
+  }), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-gray-500 mt-1"
+  }, "\u5728\u53E6\u4E00\u53F0\u7535\u8111\u4E0A\u8FD0\u884C ", /*#__PURE__*/React.createElement("code", {
+    className: "bg-gray-100 px-1 rounded"
+  }, "node sync-server.js"), " \u540E\uFF0C\u5C06\u663E\u793A\u7684\u5730\u5740\u586B\u5165\u4E0A\u65B9")), testResult === 'success' && /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2 text-green-600 text-sm bg-green-50 px-3 py-2 rounded-lg"
+  }, /*#__PURE__*/React.createElement(CheckIcon, {
+    className: "w-4 h-4"
+  }), " \u8FDE\u63A5\u6210\u529F\uFF01"), testResult === 'error' && /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2 text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg"
+  }, /*#__PURE__*/React.createElement(CloseIcon, {
+    className: "w-4 h-4"
+  }), " \u65E0\u6CD5\u8FDE\u63A5\uFF0C\u8BF7\u68C0\u67E5\u5730\u5740\u548C\u7F51\u7EDC"), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2 text-sm"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "w-2.5 h-2.5 rounded-full " + (connected ? "bg-green-400" : "bg-gray-300")
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "text-gray-600"
+  }, connected ? '已连接' : '未连接')), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-3 pt-2"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: handleTest,
+    disabled: testing || !url.trim(),
+    className: "flex-1 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors disabled:opacity-50"
+  }, testing ? '测试中...' : '测试连接'), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onSave(url),
+    className: "flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+  }, "\u4FDD\u5B58")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-amber-50 border border-amber-200 rounded-lg p-3"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-xs text-amber-800"
+  }, /*#__PURE__*/React.createElement("strong", null, "\u4F7F\u7528\u8BF4\u660E\uFF1A"), "\u4E24\u53F0\u7535\u8111\u9700\u5728\u540C\u4E00\u5C40\u57DF\u7F51\u5185\u3002\u5728\u5176\u4E2D\u4E00\u53F0\u8FD0\u884C\u540C\u6B65\u670D\u52A1\u5668\uFF0C\u53E6\u4E00\u53F0\u586B\u5165\u670D\u52A1\u5668\u5730\u5740\u5373\u53EF\u5B9E\u65F6\u540C\u6B65\u6570\u636E\u3002\u6570\u636E\u5B58\u50A8\u5728\u8FD0\u884C\u670D\u52A1\u5668\u7684\u90A3\u53F0\u7535\u8111\u4E0A\u3002")))));
+}
+
 // ===== 主组件 =====
 function App() {
   const [tab, setTab] = useState('pos');
@@ -3421,6 +3605,17 @@ function App() {
   const [lastBackupTime, setLastBackupTime] = useState('');
   const [backingUp, setBackingUp] = useState(false);
   const [scheduledBackupEnabled, setScheduledBackupEnabled] = useState(false);
+
+  // 局域网同步状态
+  const [syncServerUrl, setSyncServerUrl] = useState('');
+  const [syncConnected, setSyncConnected] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [showSyncSettings, setShowSyncSettings] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(''); // '' | 'pushing' | 'pulling' | 'error'
+  const syncUrlRef = useRef('');
+  const isFromSyncRef = useRef(false);
+  const syncTimer2Ref = useRef(null);
+  const pushTimerRef = useRef(null);
 
   // 初始化：从 IndexedDB 加载数据
   useEffect(() => {
@@ -3470,7 +3665,7 @@ function App() {
     syncToIndexedDB(products, members, sales, pointsRecords);
   }, [products, members, sales, pointsRecords]);
 
-  // 加载备份设置
+  // 加载备份设置和同步设置
   useEffect(() => {
     if (loading) return;
     (async () => {
@@ -3479,6 +3674,11 @@ function App() {
         if (backupSetting) setScheduledBackupEnabled(true);
         const lastTime = await metaGet('lastBackupTime');
         if (lastTime) setLastBackupTime(lastTime);
+        const syncUrl = await metaGet('syncServerUrl');
+        if (syncUrl) {
+          setSyncServerUrl(syncUrl);
+          syncUrlRef.current = syncUrl;
+        }
       } catch (e) {/* 忽略 */}
     })();
   }, [loading]);
@@ -3506,6 +3706,126 @@ function App() {
     const timer = setInterval(checkBackup, 60000);
     return () => clearInterval(timer);
   }, [loading, scheduledBackupEnabled]);
+
+  // 局域网同步 - 初始连接和拉取
+  useEffect(() => {
+    if (loading || !syncServerUrl) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const serverData = await pullFromServer(syncServerUrl);
+        if (cancelled) return;
+        setSyncConnected(true);
+        setSyncStatus('');
+        // 合并数据
+        const mp = mergeArrays(products, serverData.products || []);
+        const mm = mergeArrays(members, serverData.members || []);
+        const ms = mergeArrays(sales, serverData.sales || []);
+        const mr = mergeArrays(pointsRecords, serverData.pointsRecords || []);
+        if (mp.length !== products.length || mm.length !== members.length || ms.length !== sales.length || mr.length !== pointsRecords.length) {
+          isFromSyncRef.current = true;
+          setProducts(mp);
+          setMembers(mm);
+          setSales(ms);
+          setPointsRecords(mr);
+          setTimeout(() => {
+            isFromSyncRef.current = false;
+          }, 500);
+        }
+      } catch (e) {
+        if (cancelled) return;
+        console.warn('同步服务器连接失败:', e.message);
+        setSyncConnected(false);
+        setSyncStatus('');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [syncServerUrl]);
+
+  // 局域网同步 - 定时拉取（每5秒）
+  useEffect(() => {
+    if (loading || !syncServerUrl || !syncConnected) return;
+    syncTimer2Ref.current = setInterval(async () => {
+      try {
+        const serverData = await pullFromServer(syncUrlRef.current);
+        const mp = mergeArrays(products, serverData.products || []);
+        const mm = mergeArrays(members, serverData.members || []);
+        const ms = mergeArrays(sales, serverData.sales || []);
+        const mr = mergeArrays(pointsRecords, serverData.pointsRecords || []);
+        if (mp.length !== products.length || mm.length !== members.length || ms.length !== sales.length || mr.length !== pointsRecords.length) {
+          isFromSyncRef.current = true;
+          setProducts(mp);
+          setMembers(mm);
+          setSales(ms);
+          setPointsRecords(mr);
+          setTimeout(() => {
+            isFromSyncRef.current = false;
+          }, 500);
+        }
+        setSyncConnected(true);
+        setSyncStatus('');
+      } catch (e) {
+        setSyncConnected(false);
+        setSyncStatus('');
+      }
+    }, 5000);
+    return () => {
+      if (syncTimer2Ref.current) clearInterval(syncTimer2Ref.current);
+    };
+  }, [loading, syncServerUrl, syncConnected, products, members, sales, pointsRecords]);
+
+  // 局域网同步 - 数据变更时推送
+  useEffect(() => {
+    if (!initialLoadDoneRef.current || !syncServerUrl || !syncConnected || isFromSyncRef.current) return;
+    if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    pushTimerRef.current = setTimeout(async () => {
+      try {
+        setSyncing(true);
+        setSyncStatus('pushing');
+        await pushToServer(syncUrlRef.current, {
+          products,
+          members,
+          sales,
+          pointsRecords
+        });
+        setSyncStatus('');
+      } catch (e) {
+        console.warn('同步推送失败:', e.message);
+        setSyncConnected(false);
+        setSyncStatus('');
+      } finally {
+        setSyncing(false);
+      }
+    }, 800);
+    return () => {
+      if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    };
+  }, [products, members, sales, pointsRecords, syncServerUrl, syncConnected]);
+
+  // 同步设置处理函数
+  const handleSaveSyncUrl = async url => {
+    const trimmed = url.trim().replace(/\/+$/, '');
+    setSyncServerUrl(trimmed);
+    syncUrlRef.current = trimmed;
+    await metaSet('syncServerUrl', trimmed);
+    if (trimmed) {
+      try {
+        await pullFromServer(trimmed);
+        setSyncConnected(true);
+        showToast('同步服务器已连接');
+      } catch (e) {
+        setSyncConnected(false);
+        showToast('无法连接同步服务器: ' + e.message);
+      }
+    } else {
+      setSyncConnected(false);
+      setSyncStatus('');
+      showToast('已断开同步');
+    }
+    setShowSyncSettings(false);
+  };
   const toggleScheduledBackup = async () => {
     const newVal = !scheduledBackupEnabled;
     setScheduledBackupEnabled(newVal);
@@ -3687,7 +4007,8 @@ function App() {
       showToast('商品已添加');
       return [...ps, {
         ...data,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       }];
     });
   };
@@ -3716,7 +4037,8 @@ function App() {
       showToast('会员已添加');
       return [...ms, {
         ...data,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       }];
     });
   };
@@ -3731,7 +4053,8 @@ function App() {
       ...sale,
       id: uid(),
       date: todayStr(),
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
     setSales(s => [...s, saleRecord]);
     // 扣库存
@@ -3761,7 +4084,8 @@ function App() {
         type: '购买积分',
         description: `购物消费 ¥${fmt(sale.total)}（${sale.items.map(i => i.name + '×' + i.qty).join('，')}）`,
         date: todayStr(),
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       }]);
     }
     showToast(`结账成功 ¥${fmt(sale.total)}`);
@@ -3809,7 +4133,11 @@ function App() {
 
   // 手动调整积分
   const handleAdjustPoints = record => {
-    setPointsRecords(rs => [...rs, record]);
+    const recordWithTime = {
+      ...record,
+      updatedAt: new Date().toISOString()
+    };
+    setPointsRecords(rs => [...rs, recordWithTime]);
     setMembers(ms => ms.map(m => {
       if (m.id !== record.memberId) return m;
       const points = Math.max(0, (m.points || 0) + record.points);
@@ -3898,7 +4226,19 @@ function App() {
     className: "w-2 h-2 rounded-full " + (scheduledBackupEnabled ? "bg-teal-400" : "bg-gray-300")
   }), /*#__PURE__*/React.createElement("span", {
     className: "hidden lg:inline"
-  }, scheduledBackupEnabled ? '定时✓' : '定时'))))), /*#__PURE__*/React.createElement("main", {
+  }, scheduledBackupEnabled ? '定时✓' : '定时')), /*#__PURE__*/React.createElement("div", {
+    className: "w-px h-5 bg-gray-200 mx-0.5 hidden lg:block"
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowSyncSettings(true),
+    className: "flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm border rounded-lg transition-colors whitespace-nowrap " + (syncConnected ? "text-green-700 border-green-300 hover:bg-green-50" : syncServerUrl ? "text-red-600 border-red-300 hover:bg-red-50" : "text-gray-600 border-gray-300 hover:bg-gray-50"),
+    title: syncConnected ? "局域网同步已连接" : syncServerUrl ? "同步服务器未连接，点击设置" : "点击设置局域网同步"
+  }, syncing ? /*#__PURE__*/React.createElement("span", {
+    className: "w-3.5 h-3.5 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"
+  }) : /*#__PURE__*/React.createElement(SyncIcon, {
+    className: "w-3.5 h-3.5"
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "hidden lg:inline"
+  }, syncConnected ? '已同步' : syncServerUrl ? '未连接' : '同步'))))), /*#__PURE__*/React.createElement("main", {
     className: "max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-6"
   }, loading ? /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col items-center justify-center py-20 text-gray-400"
@@ -3925,7 +4265,12 @@ function App() {
     sales: sales,
     products: products,
     onDeleteSale: deleteSale
-  }))), toast && /*#__PURE__*/React.createElement("div", {
+  }))), showSyncSettings && /*#__PURE__*/React.createElement(SyncSettingsModal, {
+    currentUrl: syncServerUrl,
+    connected: syncConnected,
+    onSave: handleSaveSyncUrl,
+    onClose: () => setShowSyncSettings(false)
+  }), toast && /*#__PURE__*/React.createElement("div", {
     className: "fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg z-50 text-sm"
   }, toast));
 }
