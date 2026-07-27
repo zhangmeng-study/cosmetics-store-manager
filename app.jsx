@@ -598,7 +598,7 @@ function DashboardPage({ products, members, onCheckout }) {
         return c.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
       }
       if ((product.stock || 0) < 1) { alert('库存不足'); return c; }
-      return [...c, { id: product.id, name: product.name, price: product.price, qty: 1, stock: product.stock }];
+      return [...c, { id: product.id, name: product.name, price: product.price, cost: product.cost || 0, qty: 1, stock: product.stock }];
     });
   };
 
@@ -715,7 +715,7 @@ function DashboardPage({ products, members, onCheckout }) {
     const currentPaymentMethod = paymentMethodRef.current; // Use ref to get latest value
     const pm = PAYMENT_METHODS.find(p => p.id === currentPaymentMethod);
     onCheckout({
-      items: cartRef.current.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
+      items: cartRef.current.map(i => ({ id: i.id, name: i.name, price: i.price, cost: i.cost || 0, qty: i.qty })),
       memberId: memberIdRef.current || null,
       subtotal: cartTotal,
       discount: discount, // Use current discount value from closure
@@ -2132,8 +2132,8 @@ function StatsPage({ sales, products, onDeleteSale }) {
     let totalCost = 0;
     filtered.forEach(s => {
       s.items.forEach(item => {
-        const product = products.find(p => p.id === item.id);
-        const cost = product ? (product.cost || 0) : 0;
+        // 使用销售时记录的成本，如果没有则从当前商品查找
+        const cost = item.cost !== undefined ? item.cost : (products.find(p => p.id === item.id)?.cost || 0);
         totalCost += cost * item.qty;
       });
     });

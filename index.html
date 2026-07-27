@@ -1146,6 +1146,7 @@ function DashboardPage({
         id: product.id,
         name: product.name,
         price: product.price,
+        cost: product.cost || 0,
         qty: 1,
         stock: product.stock
       }];
@@ -1290,6 +1291,7 @@ function DashboardPage({
         id: i.id,
         name: i.name,
         price: i.price,
+        cost: i.cost || 0,
         qty: i.qty
       })),
       memberId: memberIdRef.current || null,
@@ -2920,8 +2922,8 @@ function StatsPage({
     let totalCost = 0;
     filtered.forEach(s => {
       s.items.forEach(item => {
-        const product = products.find(p => p.id === item.id);
-        const cost = product ? product.cost || 0 : 0;
+        // 使用销售时记录的成本，如果没有则从当前商品查找
+        const cost = item.cost !== undefined ? item.cost : products.find(p => p.id === item.id)?.cost || 0;
         totalCost += cost * item.qty;
       });
     });
