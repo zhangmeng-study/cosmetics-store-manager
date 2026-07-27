@@ -3194,30 +3194,226 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-// 导出全部数据为 JSON 文件
+// 导出全部数据为 Excel 文件
 async function exportToJSON() {
   const [p, m, s, r] = await Promise.all([dbGetAll('products'), dbGetAll('members'), dbGetAll('sales'), dbGetAll('pointsRecords')]);
-  const data = JSON.stringify({
-    products: p,
-    members: m,
-    sales: s,
-    pointsRecords: r
-  }, null, 2);
-  return new Blob([data], {
-    type: 'application/json'
+
+  // 获取分类名称
+  const getCategoryName = catId => {
+    const cat = CATEGORIES.find(c => c.id === catId);
+    return cat ? cat.name : catId || '';
+  };
+  // 获取会员等级名称
+  const getLevelName = levelId => {
+    const lv = MEMBER_LEVELS.find(l => l.id === levelId);
+    return lv ? lv.name : levelId || '';
+  };
+
+  // 构建商品 sheet 数据
+  const productRows = p.map(item => ({
+    '商品名称': item.name || '',
+    '分类': getCategoryName(item.category),
+    '售价': item.price || 0,
+    '成本价': item.cost || 0,
+    '利润': (item.price || 0) - (item.cost || 0),
+    '库存': item.stock || 0,
+    '条码': item.barcode || '',
+    '单位': item.unit || '',
+    '创建时间': item.createdAt ? fmtDate(item.createdAt) : ''
+  }));
+
+  // 构建会员 sheet 数据
+  const memberRows = m.map(item => ({
+    '姓名': item.name || '',
+    '手机号': item.phone || '',
+    '等级': getLevelName(item.level),
+    '积分': item.points || 0,
+    '生日': item.birthday || '',
+    '备注': item.note || '',
+    '创建时间': item.createdAt ? fmtDate(item.createdAt) : ''
+  }));
+
+  // 构建销售记录 sheet 数据
+  const salesRows = s.map(item => ({
+    '订单号': item.id || '',
+    '日期': item.date || '',
+    '商品明细': typeof item.itemsJson === 'string' ? item.itemsJson : JSON.stringify(item.items || item.itemsJson || []),
+    '小计': item.subtotal || 0,
+    '总计': item.total || 0,
+    '会员': item.memberName || '',
+    '创建时间': item.createdAt ? fmtDate(item.createdAt) : ''
+  }));
+
+  // 构建积分记录 sheet 数据
+  const pointsRows = r.map(item => ({
+    '会员': item.memberName || '',
+    '积分': item.points || 0,
+    '类型': item.type || '',
+    '说明': item.description || '',
+    '日期': item.date || '',
+    '创建时间': item.createdAt ? fmtDate(item.createdAt) : ''
+  }));
+
+  // 生成 Excel
+  const wb = XLSX.utils.book_new();
+  if (productRows.length > 0) {
+    const ws1 = XLSX.utils.json_to_sheet(productRows);
+    ws1['!cols'] = [{
+      wch: 20
+    }, {
+      wch: 10
+    }, {
+      wch: 10
+    }, {
+      wch: 10
+    }, {
+      wch: 8
+    }, {
+      wch: 8
+    }, {
+      wch: 16
+    }, {
+      wch: 6
+    }, {
+      wch: 12
+    }];
+    XLSX.utils.book_append_sheet(wb, ws1, '商品');
+  }
+  if (memberRows.length > 0) {
+    const ws2 = XLSX.utils.json_to_sheet(memberRows);
+    ws2['!cols'] = [{
+      wch: 12
+    }, {
+      wch: 14
+    }, {
+      wch: 12
+    }, {
+      wch: 8
+    }, {
+      wch: 12
+    }, {
+      wch: 20
+    }, {
+      wch: 12
+    }];
+    XLSX.utils.book_append_sheet(wb, ws2, '会员');
+  }
+  if (salesRows.length > 0) {
+    const ws3 = XLSX.utils.json_to_sheet(salesRows);
+    ws3['!cols'] = [{
+      wch: 16
+    }, {
+      wch: 12
+    }, {
+      wch: 40
+    }, {
+      wch: 10
+    }, {
+      wch: 10
+    }, {
+      wch: 12
+    }, {
+      wch: 12
+    }];
+    XLSX.utils.book_append_sheet(wb, ws3, '销售记录');
+  }
+  if (pointsRows.length > 0) {
+    const ws4 = XLSX.utils.json_to_sheet(pointsRows);
+    ws4['!cols'] = [{
+      wch: 12
+    }, {
+      wch: 8
+    }, {
+      wch: 12
+    }, {
+      wch: 20
+    }, {
+      wch: 12
+    }, {
+      wch: 12
+    }];
+    XLSX.utils.book_append_sheet(wb, ws4, '积分记录');
+  }
+  const wbout = XLSX.write(wb, {
+    bookType: 'xlsx',
+    type: 'array'
+  });
+  return new Blob([wbout], {
+    type: 'application/octet-stream'
   });
 }
 
-// 从 JSON 文件导入数据
+// 从 Excel 文件导入数据
 async function importFromJSON(file) {
-  const text = await file.text();
-  const data = JSON.parse(text);
-  await Promise.all([dbPutAll('products', data.products || []), dbPutAll('members', data.members || []), dbPutAll('sales', data.sales || []), dbPutAll('pointsRecords', data.pointsRecords || [])]);
+  const data = await file.arrayBuffer();
+  const wb = XLSX.read(data, {
+    type: 'array'
+  });
+  const parseSheet = name => {
+    const sheet = wb.Sheets[name];
+    if (!sheet) return [];
+    return XLSX.utils.sheet_to_json(sheet);
+  };
+  const productRows = parseSheet('商品');
+  const memberRows = parseSheet('会员');
+  const salesRows = parseSheet('销售记录');
+  const pointsRows = parseSheet('积分记录');
+
+  // 转换商品数据
+  const products = productRows.map(row => ({
+    id: uid(),
+    name: row['商品名称'] || '',
+    category: CATEGORIES.find(c => c.name === row['分类'])?.id || row['分类'] || '',
+    price: parseFloat(row['售价']) || 0,
+    cost: parseFloat(row['成本价']) || 0,
+    stock: parseInt(row['库存']) || 0,
+    barcode: row['条码'] || '',
+    unit: row['单位'] || '',
+    createdAt: row['创建时间'] ? new Date(row['创建时间']).toISOString() : new Date().toISOString()
+  }));
+
+  // 转换会员数据
+  const members = memberRows.map(row => ({
+    id: uid(),
+    name: row['姓名'] || '',
+    phone: row['手机号'] || '',
+    level: MEMBER_LEVELS.find(l => l.name === row['等级'])?.id || row['等级'] || '',
+    points: parseInt(row['积分']) || 0,
+    birthday: row['生日'] || '',
+    note: row['备注'] || '',
+    createdAt: row['创建时间'] ? new Date(row['创建时间']).toISOString() : new Date().toISOString()
+  }));
+
+  // 转换销售记录数据
+  const sales = salesRows.map(row => ({
+    id: row['订单号'] || uid(),
+    date: row['日期'] || '',
+    itemsJson: row['商品明细'] || '[]',
+    subtotal: parseFloat(row['小计']) || 0,
+    total: parseFloat(row['总计']) || 0,
+    memberId: '',
+    memberName: row['会员'] || '',
+    levelName: '',
+    createdAt: row['创建时间'] ? new Date(row['创建时间']).toISOString() : new Date().toISOString()
+  }));
+
+  // 转换积分记录数据
+  const pointsRecords = pointsRows.map(row => ({
+    id: uid(),
+    memberId: '',
+    memberName: row['会员'] || '',
+    points: parseInt(row['积分']) || 0,
+    type: row['类型'] || '',
+    description: row['说明'] || '',
+    date: row['日期'] || '',
+    createdAt: row['创建时间'] ? new Date(row['创建时间']).toISOString() : new Date().toISOString()
+  }));
+  await Promise.all([dbPutAll('products', products), dbPutAll('members', members), dbPutAll('sales', sales), dbPutAll('pointsRecords', pointsRecords)]);
   return {
-    products: data.products || [],
-    members: data.members || [],
-    sales: data.sales || [],
-    pointsRecords: data.pointsRecords || []
+    products,
+    members,
+    sales,
+    pointsRecords
   };
 }
 
@@ -3417,7 +3613,7 @@ function App() {
         try {
           const blob = await exportToJSON();
           const ts = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
-          downloadBlob(blob, '美妆门店备份_' + ts + '.json');
+          downloadBlob(blob, '美妆门店备份_' + ts + '.xlsx');
           await metaSet('lastBackupTime', now.toISOString());
           setLastBackupTime(now.toISOString());
           console.log('定时备份下载完成');
@@ -3502,7 +3698,7 @@ function App() {
       const blob = await exportToJSON();
       const now = new Date();
       const ts = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
-      const filename = '美妆门店备份_' + ts + '.json';
+      const filename = '美妆门店备份_' + ts + '.xlsx';
       downloadBlob(blob, filename);
       await metaSet('lastBackupTime', now.toISOString());
       setLastBackupTime(now.toISOString());
@@ -3514,12 +3710,12 @@ function App() {
     }
   };
 
-  // 导出全部数据为 JSON
+  // 导出全部数据为 Excel
   const handleExportDB = async () => {
     try {
       setToast('正在生成数据文件...');
       const blob = await exportToJSON();
-      downloadBlob(blob, `美妆门店备份_${todayStr()}.json`);
+      downloadBlob(blob, `美妆门店备份_${todayStr()}.xlsx`);
       setToast(null);
       showToast('数据已导出');
     } catch (e) {
@@ -3840,7 +4036,7 @@ function App() {
   }), /*#__PURE__*/React.createElement("button", {
     onClick: handleExportDB,
     className: "flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap",
-    title: "\u5BFC\u51FA JSON \u6570\u636E\u6587\u4EF6"
+    title: "\u5BFC\u51FA Excel \u6570\u636E\u6587\u4EF6"
   }, /*#__PURE__*/React.createElement(DownloadIcon, {
     className: "w-3.5 h-3.5"
   }), " ", /*#__PURE__*/React.createElement("span", {
@@ -3848,7 +4044,7 @@ function App() {
   }, "\u5BFC\u51FA")), /*#__PURE__*/React.createElement("button", {
     onClick: () => fileRef.current && fileRef.current.click(),
     className: "flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap",
-    title: "\u4ECE JSON \u6587\u4EF6\u5BFC\u5165\u6570\u636E"
+    title: "\u4ECE Excel \u6587\u4EF6\u5BFC\u5165\u6570\u636E"
   }, /*#__PURE__*/React.createElement(UploadIcon, {
     className: "w-3.5 h-3.5"
   }), " ", /*#__PURE__*/React.createElement("span", {
@@ -3856,7 +4052,7 @@ function App() {
   }, "\u5BFC\u5165")), /*#__PURE__*/React.createElement("input", {
     ref: fileRef,
     type: "file",
-    accept: ".json,application/json",
+    accept: ".xlsx,.xls",
     onChange: handleImportDB,
     className: "hidden"
   }), /*#__PURE__*/React.createElement("div", {
