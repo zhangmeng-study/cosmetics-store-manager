@@ -2685,7 +2685,7 @@ function MembersPage({
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [pointsMember, setPointsMember] = useState(null);
-  const [viewMode, setViewMode] = useState('card'); // 'card' or 'table'
+  const [viewMode, setViewMode] = useState('table'); // 'card' or 'table'
 
   const filtered = useMemo(() => {
     if (!search.trim()) return members;
