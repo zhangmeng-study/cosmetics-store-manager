@@ -1856,7 +1856,7 @@ function DashboardPage({
       className: "ml-1 text-xs text-blue-500"
     }, "(\u6539\u4EF7)"), hasCustomDiscount && /*#__PURE__*/React.createElement("span", {
       className: "ml-1 text-xs text-orange-500"
-    }, "(", Math.round((1 - effectiveDiscount) * 100), "%off)")), /*#__PURE__*/React.createElement("button", {
+    }, "(", (effectiveDiscount * 10).toFixed(1), "\u6298)")), /*#__PURE__*/React.createElement("button", {
       onClick: e => {
         e.stopPropagation();
         openItemEdit(item.id);
@@ -1914,7 +1914,7 @@ function DashboardPage({
     className: "flex items-center gap-1.5"
   }, /*#__PURE__*/React.createElement("span", null, "\u6298\u6263"), discount < 1.0 && /*#__PURE__*/React.createElement("span", {
     className: "text-xs text-orange-500"
-  }, "(", confirmedDiscount !== null ? '手动折扣' : level.name, " ", Math.round((1 - discount) * 100), "%off)"), /*#__PURE__*/React.createElement("button", {
+  }, "(", confirmedDiscount !== null ? '手动折扣' : level.name, " ", (discount * 10).toFixed(1), "\u6298)"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setEditingDiscount(true);
       setCustomDiscount(String(discount));
@@ -2170,7 +2170,7 @@ function DashboardPage({
       className: "text-gray-500 text-sm"
     }, "\u6298")), itemCustomDiscounts[editingItemId] && /*#__PURE__*/React.createElement("p", {
       className: "text-xs text-orange-500 mt-1"
-    }, "\u65B0\u6298\u6263: ", (tempDiscount * 100).toFixed(0), "% off", tempDiscount < 1.0 && /*#__PURE__*/React.createElement("span", {
+    }, "\u65B0\u6298\u6263: ", (tempDiscount * 10).toFixed(1), "\u6298", tempDiscount < 1.0 && /*#__PURE__*/React.createElement("span", {
       className: "ml-1"
     }, "(\u7701 \xA5", fmt((1 - tempDiscount) * currentPrice * item.qty), ")"))), (itemCustomPrices[editingItemId] || itemCustomDiscounts[editingItemId]) && /*#__PURE__*/React.createElement("div", {
       className: "p-3 bg-blue-50 border border-blue-200 rounded-lg"
