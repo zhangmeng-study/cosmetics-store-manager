@@ -2528,6 +2528,7 @@ async function exportToJSON() {
     '手机号': item.phone || '',
     '等级': getLevelName(item.level),
     '积分': item.points || 0,
+    '折算价格': (item.points || 0) * 0.05,
     '生日': item.birthday || '',
     '备注': item.note || '',
     '创建时间': item.createdAt ? fmtDate(item.createdAt) : '',
@@ -2563,7 +2564,7 @@ async function exportToJSON() {
   }
   if (memberRows.length > 0) {
     const ws2 = XLSX.utils.json_to_sheet(memberRows);
-    ws2['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 20 }, { wch: 12 }];
+    ws2['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 20 }, { wch: 12 }];
     XLSX.utils.book_append_sheet(wb, ws2, '会员');
   }
   if (salesRows.length > 0) {
@@ -3064,6 +3065,7 @@ function App() {
         '手机号': m.phone || '',
         '等级': getLevelName(m.level),
         '积分': m.points || 0,
+        '折算价格': (m.points || 0) * 0.05,
         '生日': m.birthday || '',
         '备注': m.note || '',
         '创建时间': m.createdAt ? fmtDate(m.createdAt) : '',
@@ -3077,7 +3079,7 @@ function App() {
       }
       if (memberRows.length > 0) {
         const ws2 = XLSX.utils.json_to_sheet(memberRows);
-        ws2['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 20 }, { wch: 12 }];
+        ws2['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 20 }, { wch: 12 }];
         XLSX.utils.book_append_sheet(wb, ws2, '会员记录');
       }
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
