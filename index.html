@@ -1097,11 +1097,13 @@ function DashboardPage({
   // Use confirmedDiscount if set, otherwise fall back to level.discount
   const discount = confirmedDiscount !== null ? confirmedDiscount : editingDiscount && customDiscount !== '' ? parseFloat(customDiscount) || 1 : level.discount;
   // 会员/全局折扣仅对没有单品折扣的商品生效，有单品折扣的商品直接用折后价
-  const calculatedTotal = cart.reduce((s, i) => {
-    const effectivePrice = confirmedItemPrices[i.id] !== undefined ? confirmedItemPrices[i.id] : i.price;
-    const hasItemDiscount = confirmedItemDiscounts[i.id] !== undefined;
-    const itemDiscount = hasItemDiscount ? confirmedItemDiscounts[i.id] : discount;
-    return s + effectivePrice * itemDiscount * i.qty;
+  const calculatedTotal = useMemo(() => {
+    return cart.reduce((s, i) => {
+      const effectivePrice = confirmedItemPrices[i.id] !== undefined ? confirmedItemPrices[i.id] : i.price;
+      const hasItemDiscount = confirmedItemDiscounts[i.id] !== undefined;
+      const itemDiscount = hasItemDiscount ? confirmedItemDiscounts[i.id] : discount;
+      return s + effectivePrice * itemDiscount * i.qty;
+    }, 0);
   }, [cart, confirmedItemPrices, confirmedItemDiscounts, discount]);
   // Use confirmedTotal if set, otherwise fall back to calculatedTotal
   const finalTotal = confirmedTotal !== null ? confirmedTotal : editingTotal && customTotal !== '' ? parseFloat(customTotal) || 0 : calculatedTotal;
