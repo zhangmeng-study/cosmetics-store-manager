@@ -3672,8 +3672,6 @@ function App() {
         createdAt: new Date().toISOString()
       }];
     });
-    // 自动导出今日数据
-    setTimeout(() => autoExportTodayData(), 300);
   };
   const deleteProduct = id => {
     setProducts(ps => ps.filter(p => p.id !== id));
@@ -3703,8 +3701,6 @@ function App() {
         createdAt: new Date().toISOString()
       }];
     });
-    // 自动导出今日数据
-    setTimeout(() => autoExportTodayData(), 300);
   };
   const deleteMember = id => {
     setMembers(ms => ms.filter(m => m.id !== id));
