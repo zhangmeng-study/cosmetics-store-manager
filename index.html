@@ -3579,6 +3579,7 @@ function App() {
   const [members, setMembers] = useState([]);
   const [sales, setSales] = useState([]);
   const [pointsRecords, setPointsRecords] = useState([]);
+  const initialLoadDoneRef = useRef(false);
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dbBusy, setDbBusy] = useState(false);
@@ -3625,6 +3626,7 @@ function App() {
         setMembers(m);
         setSales(s);
         setPointsRecords(r);
+        initialLoadDoneRef.current = true;
       } catch (e) {
         console.error('加载数据失败', e);
         console.error('Error details:', e.message, e.stack);
@@ -3637,6 +3639,23 @@ function App() {
       clearTimeout(timer);
     };
   }, []);
+
+  // 数据变更自动同步到 SQLite（初始加载完成后才生效）
+  useEffect(() => {
+    if (!initialLoadDoneRef.current || !sqlDb) return;
+    const timer = setTimeout(async () => {
+      try {
+        await dbPutAll('products', products);
+        await dbPutAll('members', members);
+        await dbPutAll('sales', sales);
+        await dbPutAll('pointsRecords', pointsRecords);
+        console.log('数据已同步到 SQLite');
+      } catch (e) {
+        console.error('同步到 SQLite 失败:', e);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [products, members, sales, pointsRecords]);
 
   // 登录状态检查 + 定时备份
   useEffect(() => {
