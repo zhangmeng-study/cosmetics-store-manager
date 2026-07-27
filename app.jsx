@@ -76,9 +76,6 @@ const AlipayIcon = (props) => (
 const CardIcon = (props) => (
   <Icon {...props}><rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /></Icon>
 );
-const LockIcon = (props) => (
-  <Icon {...props}><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></Icon>
-);
 const KeyboardIcon = (props) => (
   <Icon {...props}><rect x="2" y="4" width="20" height="16" rx="2" /><line x1="6" y1="8" x2="6.01" y2="8" /><line x1="10" y1="8" x2="10.01" y2="8" /><line x1="14" y1="8" x2="14.01" y2="8" /><line x1="18" y1="8" x2="18.01" y2="8" /><line x1="6" y1="12" x2="6.01" y2="12" /><line x1="10" y1="12" x2="10.01" y2="12" /><line x1="14" y1="12" x2="14.01" y2="12" /><line x1="18" y1="12" x2="18.01" y2="12" /><line x1="8" y1="16" x2="16" y2="16" /></Icon>
 );
@@ -87,6 +84,12 @@ const ListIcon = (props) => (
 );
 const GridViewIcon = (props) => (
   <Icon {...props}><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></Icon>
+);
+const SyncIcon = (props) => (
+  <Icon {...props}><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></Icon>
+);
+const ServerIcon = (props) => (
+  <Icon {...props}><rect x="2" y="2" width="20" height="8" rx="2" ry="2" /><rect x="2" y="14" width="20" height="8" rx="2" ry="2" /><line x1="6" y1="6" x2="6.01" y2="6" /><line x1="6" y1="18" x2="6.01" y2="18" /></Icon>
 );
 
 // ===== 常量 =====
@@ -123,6 +126,13 @@ const PAYMENT_METHODS = [
 const SHORTCUTS = [
   { key: 'F1', desc: '显示快捷键帮助' },
   { key: 'F2', desc: '搜索会员' },
+  { key: 'F3', desc: '搜索商品' },
+  { key: 'F4', desc: '聚焦收款金额输入框' },
+  { key: 'Ctrl+R', desc: '聚焦收款金额输入框（备选）' },
+  { key: 'F5', desc: '编辑折扣' },
+  { key: 'F6', desc: '修改总价' },
+  { key: 'F7', desc: '编辑购物车最后一项的价格/折扣' },
+  { key: '+/-', desc: '购物车最后一项数量增减' },
   { key: '1-4', desc: '选择支付方式（微信/支付宝/信用卡/现金）' },
   { key: 'Enter', desc: '结账 / 关闭钱箱' },
   { key: 'F9', desc: '结账（备选）' },
@@ -482,18 +492,59 @@ function DashboardPage({ products, members, onCheckout }) {
   const [customTotal, setCustomTotal] = useState('');
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [customDiscount, setCustomDiscount] = useState('');
+  const [confirmedDiscount, setConfirmedDiscount] = useState(null); // Persist custom discount after Enter confirmation
+  const [confirmedTotal, setConfirmedTotal] = useState(null); // Persist custom total price after Enter confirmation
   const [receivedAmount, setReceivedAmount] = useState('');
+  const [receivedAmountManuallyEdited, setReceivedAmountManuallyEdited] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
-  const [memberSearching, setMemberSearching] = useState(false);
+  const [showMemberSearchModal, setShowMemberSearchModal] = useState(false);
+  const [selectedMemberIndex, setSelectedMemberIndex] = useState(0);
+  const [showProductSearchModal, setShowProductSearchModal] = useState(false);
+  const [selectedProductIndex, setSelectedProductIndex] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [showCashDrawer, setShowCashDrawer] = useState(false);
   const [lastChange, setLastChange] = useState(0);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [postCheckout, setPostCheckout] = useState(false); // true after checkout, waiting for Enter to close drawer
+  const [lastPaymentMethod, setLastPaymentMethod] = useState('cash'); // Save payment method used in last checkout
+  const [lastTotal, setLastTotal] = useState(0); // Save total amount from last checkout
+  
+  // Per-item editing states
+  const [editingItemId, setEditingItemId] = useState(null); // ID of item being edited
+  const [itemCustomPrices, setItemCustomPrices] = useState({}); // Map: itemId -> custom price
+  const [itemCustomDiscounts, setItemCustomDiscounts] = useState({}); // Map: itemId -> custom discount (0-1)
+  const [confirmedItemPrices, setConfirmedItemPrices] = useState({}); // Map: itemId -> confirmed custom price
+  const [confirmedItemDiscounts, setConfirmedItemDiscounts] = useState({}); // Map: itemId -> confirmed custom discount
   const memberSearchRef = useRef(null);
   const barcodeRef = useRef(null);
+  const receivedAmountRef = useRef(null);
+  const paymentMethodRef = useRef(paymentMethod); // Track current payment method
+  const cartRef = useRef(cart); // Track current cart
+  const finalTotalRef = useRef(0); // Track current finalTotal - initialized with default value
+  const changeRef = useRef(0); // Track current change - initialized with default value
+  const memberIdRef = useRef(''); // Track current memberId - initialized with default value
+
+  // Keep refs in sync with state (only for variables declared before refs)
+  useEffect(() => {
+    paymentMethodRef.current = paymentMethod;
+  }, [paymentMethod]);
+  useEffect(() => {
+    cartRef.current = cart;
+  }, [cart]);
+  // Note: finalTotalRef, changeRef, memberIdRef are initialized with defaults
+  // and don't need useEffect sync to avoid TDZ errors
 
   const filtered = useMemo(() => {
+    let list = products;
+    if (category !== 'all') list = list.filter(p => p.category === category);
+    if (!showProductSearchModal && search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q) || (p.brand || '').toLowerCase().includes(q) || (p.barcode || '').includes(search.trim()));
+    }
+    return list;
+  }, [products, search, category, showProductSearchModal]);
+
+  const filteredProductsForModal = useMemo(() => {
     let list = products;
     if (category !== 'all') list = list.filter(p => p.category === category);
     if (search.trim()) {
@@ -503,13 +554,28 @@ function DashboardPage({ products, members, onCheckout }) {
     return list;
   }, [products, search, category]);
 
-  const cartTotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.qty, 0), [cart]);
+  const cartTotal = useMemo(() => {
+    return cart.reduce((s, i) => {
+      const effectivePrice = confirmedItemPrices[i.id] !== undefined ? confirmedItemPrices[i.id] : i.price;
+      const effectiveDiscount = confirmedItemDiscounts[i.id] !== undefined ? confirmedItemDiscounts[i.id] : 1.0;
+      return s + effectivePrice * effectiveDiscount * i.qty;
+    }, 0);
+  }, [cart, confirmedItemPrices, confirmedItemDiscounts]);
   const member = members.find(m => m.id === memberId);
   const level = member ? getLevel(member.points) : MEMBER_LEVELS[0];
-  const discount = editingDiscount && customDiscount !== '' ? (parseFloat(customDiscount) || 1) : level.discount;
-  const calculatedTotal = cartTotal * discount;
-  const finalTotal = editingTotal && customTotal !== '' ? (parseFloat(customTotal) || 0) : calculatedTotal;
+  // Use confirmedDiscount if set, otherwise fall back to level.discount
+  const discount = confirmedDiscount !== null ? confirmedDiscount : (editingDiscount && customDiscount !== '' ? (parseFloat(customDiscount) || 1) : level.discount);
+  const calculatedTotal = cartTotal * discount; // Apply global/member discount on top of per-item prices
+  // Use confirmedTotal if set, otherwise fall back to calculatedTotal
+  const finalTotal = confirmedTotal !== null ? confirmedTotal : (editingTotal && customTotal !== '' ? (parseFloat(customTotal) || 0) : calculatedTotal);
   const change = receivedAmount ? Math.max(0, (parseFloat(receivedAmount) || 0) - finalTotal) : 0;
+
+  // Auto-fill received amount when finalTotal changes (if not manually edited)
+  useEffect(() => {
+    if (finalTotal > 0 && !receivedAmountManuallyEdited) {
+      setReceivedAmount(finalTotal.toFixed(2));
+    }
+  }, [finalTotal, receivedAmountManuallyEdited]);
 
   const addToCart = (product) => {
     setCart(c => {
@@ -566,22 +632,89 @@ function DashboardPage({ products, members, onCheckout }) {
     if (newQty > (i.stock || 0)) { alert('库存不足'); return i; }
     return { ...i, qty: newQty };
   }));
+  const setItemQty = (id, value) => {
+    const qty = parseInt(value);
+    if (isNaN(qty) || qty < 1) return;
+    setCart(c => c.map(i => {
+      if (i.id !== id) return i;
+      if (qty > (i.stock || 0)) { alert('库存不足'); return i; }
+      return { ...i, qty };
+    }));
+  };
+
+  // Per-item editing functions
+  const openItemEdit = (itemId) => {
+    setEditingItemId(itemId);
+  };
+
+  const closeItemEdit = () => {
+    setEditingItemId(null);
+  };
+
+  const updateItemCustomPrice = (value) => {
+    setItemCustomPrices(prev => ({ ...prev, [editingItemId]: value }));
+  };
+
+  const updateItemCustomDiscount = (value) => {
+    setItemCustomDiscounts(prev => ({ ...prev, [editingItemId]: value }));
+  };
+
+  const confirmItemPrice = () => {
+    if (!editingItemId) return;
+    const price = parseFloat(itemCustomPrices[editingItemId]);
+    if (!isNaN(price) && price >= 0) {
+      setConfirmedItemPrices(prev => ({ ...prev, [editingItemId]: price }));
+    }
+    closeItemEdit();
+  };
+
+  const confirmItemDiscount = () => {
+    if (!editingItemId) return;
+    const disc = parseFloat(itemCustomDiscounts[editingItemId]);
+    if (!isNaN(disc) && disc > 0 && disc <= 1) {
+      setConfirmedItemDiscounts(prev => ({ ...prev, [editingItemId]: disc }));
+    }
+    closeItemEdit();
+  };
+
+  // Get effective price for an item (considering custom price or discount)
+  const getItemEffectivePrice = (item) => {
+    // Check for confirmed custom price first
+    if (confirmedItemPrices[item.id] !== undefined) {
+      return confirmedItemPrices[item.id];
+    }
+    // Otherwise use original price
+    return item.price;
+  };
+
+  // Get effective discount for an item
+  const getItemEffectiveDiscount = (item) => {
+    // Check for confirmed custom discount first
+    if (confirmedItemDiscounts[item.id] !== undefined) {
+      return confirmedItemDiscounts[item.id];
+    }
+    // Otherwise no item-level discount (use 1.0)
+    return 1.0;
+  };
 
   const checkout = () => {
-    if (!cart.length) { alert('购物车为空'); return; }
-    const pm = PAYMENT_METHODS.find(p => p.id === paymentMethod);
+    if (!cartRef.current.length) { alert('购物车为空'); return; }
+    const currentPaymentMethod = paymentMethodRef.current; // Use ref to get latest value
+    const pm = PAYMENT_METHODS.find(p => p.id === currentPaymentMethod);
     onCheckout({
-      items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
-      memberId: memberId || null,
+      items: cartRef.current.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
+      memberId: memberIdRef.current || null,
       subtotal: cartTotal,
-      discount: discount,
-      total: finalTotal,
+      discount: discount, // Use current discount value from closure
+      total: finalTotalRef.current,
       memberName: member ? member.name : null,
       levelName: level.name,
-      paymentMethod: paymentMethod,
+      paymentMethod: currentPaymentMethod,
       paymentMethodName: pm ? pm.name : '现金',
     });
-    setLastChange(change);
+    setLastChange(changeRef.current);
+    setLastPaymentMethod(currentPaymentMethod); // Save for cash drawer display
+    setLastTotal(finalTotalRef.current); // Save for cash drawer display
     setShowCashDrawer(true);
     setPostCheckout(true);
     setCart([]);
@@ -590,16 +723,19 @@ function DashboardPage({ products, members, onCheckout }) {
     setCustomTotal('');
     setEditingDiscount(false);
     setCustomDiscount('');
+    setConfirmedDiscount(null); // Reset confirmed discount for next transaction
+    setConfirmedTotal(null); // Reset confirmed total for next transaction
     setReceivedAmount('');
+    setReceivedAmountManuallyEdited(false);
     setPaymentMethod('cash');
     setMemberSearch('');
   };
 
   const filteredMembers = useMemo(() => {
-    if (!memberSearching || !memberSearch.trim()) return [];
+    if (!showMemberSearchModal || !memberSearch.trim()) return members;
     const q = memberSearch.trim().toLowerCase();
     return members.filter(m => m.name.toLowerCase().includes(q) || (m.phone || '').includes(memberSearch.trim()));
-  }, [members, memberSearch, memberSearching]);
+  }, [members, memberSearch, showMemberSearchModal]);
 
   // 快捷键处理
   useEffect(() => {
@@ -612,8 +748,40 @@ function DashboardPage({ products, members, onCheckout }) {
         setShowShortcuts(true);
       } else if (e.key === 'F2') {
         e.preventDefault();
-        memberSearchRef.current?.focus();
-      } else if (e.key === 'Enter' && !isInput) {
+        setMemberSearch('');
+        setSelectedMemberIndex(0);
+        setShowMemberSearchModal(true);
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        setSearch('');
+        setSelectedProductIndex(0);
+        setShowProductSearchModal(true);
+      } else if (e.key === 'F4' || (e.ctrlKey && e.key === 'r')) {
+        e.preventDefault();
+        receivedAmountRef.current?.focus();
+        receivedAmountRef.current?.select();
+      } else if (e.key === 'F5') {
+        e.preventDefault();
+        setEditingDiscount(true);
+        // Show current effective discount (confirmed or member level or default 1.0)
+        const currentDiscount = confirmedDiscount !== null ? confirmedDiscount : (member ? level.discount : 1.0);
+        setCustomDiscount(String(currentDiscount));
+      } else if (e.key === 'F6') {
+        e.preventDefault();
+        setEditingTotal(true);
+        // Show current effective total (confirmed or calculated)
+        const currentTotal = confirmedTotal !== null ? confirmedTotal : calculatedTotal;
+        setCustomTotal(String(currentTotal.toFixed(2)));
+      } else if (e.key === 'Enter' && editingItemId) {
+        // Confirm item edit (works even when input is focused in modal)
+        e.preventDefault();
+        confirmItemPrice();
+        confirmItemDiscount();
+      } else if (e.key === 'Escape' && editingItemId) {
+        // Close item edit modal (works even when input is focused in modal)
+        e.preventDefault();
+        closeItemEdit();
+      } else if (e.key === 'Enter' && !isInput && !editingDiscount && !editingTotal) {
         e.preventDefault();
         if (postCheckout) {
           // Second Enter after checkout: close cash drawer
@@ -623,14 +791,34 @@ function DashboardPage({ products, members, onCheckout }) {
           // First Enter: trigger checkout
           checkout();
         }
-      } else if (!isInput) {
-        // Number keys 1-4 for payment methods (only when not in input)
+      } else if (!isInput && cart.length > 0 && !editingDiscount && !editingTotal) {
+        // Number keys 1-4 for payment methods (only when not in any input field)
         if (e.key >= '1' && e.key <= '4') {
           e.preventDefault();
           const idx = parseInt(e.key) - 1;
           if (idx < PAYMENT_METHODS.length) {
             setPaymentMethod(PAYMENT_METHODS[idx].id);
           }
+        }
+        // +/- for last cart item quantity adjustment
+        else if (e.key === '+' || e.key === '=') {
+          e.preventDefault();
+          const lastItem = cart[cart.length - 1];
+          if (lastItem && lastItem.qty < (lastItem.stock || 0)) {
+            updateQty(lastItem.id, 1);
+          }
+        } else if (e.key === '-' || e.key === '_') {
+          e.preventDefault();
+          const lastItem = cart[cart.length - 1];
+          if (lastItem && lastItem.qty > 1) {
+            updateQty(lastItem.id, -1);
+          }
+        }
+      } else if (e.key === 'F7') {
+        e.preventDefault();
+        // Open item edit modal for last cart item
+        if (cart.length > 0) {
+          openItemEdit(cart[cart.length - 1].id);
         }
       } else if (e.key === 'F9') {
         e.preventDefault();
@@ -641,13 +829,78 @@ function DashboardPage({ products, members, onCheckout }) {
         setPostCheckout(false);
         setEditingDiscount(false);
         setCustomDiscount('');
+        setConfirmedDiscount(null);
         setEditingTotal(false);
         setCustomTotal('');
+        setConfirmedTotal(null);
+        setShowProductSearchModal(false);
+        setSearch('');
+        setSelectedProductIndex(0);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart.length, paymentMethod, receivedAmount, finalTotal, change, memberId, postCheckout]);
+  }, [cart.length, editingDiscount, editingTotal, postCheckout, editingItemId]);
+
+  // Member search modal keyboard navigation
+  useEffect(() => {
+    if (showMemberSearchModal) {
+      const handleKey = (e) => {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSelectedMemberIndex(i => Math.min(i + 1, filteredMembers.length - 1));
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSelectedMemberIndex(i => Math.max(i - 1, 0));
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (filteredMembers[selectedMemberIndex]) {
+            setMemberId(filteredMembers[selectedMemberIndex].id);
+            setConfirmedDiscount(null); // Reset custom discount when member changes
+            setConfirmedTotal(null); // Reset custom total when member changes
+            setShowMemberSearchModal(false);
+            setMemberSearch('');
+            setSelectedMemberIndex(0);
+          }
+        } else if (e.key === 'Escape') {
+          setShowMemberSearchModal(false);
+          setMemberSearch('');
+          setSelectedMemberIndex(0);
+        }
+      };
+      window.addEventListener('keydown', handleKey);
+      return () => window.removeEventListener('keydown', handleKey);
+    }
+  }, [showMemberSearchModal, selectedMemberIndex, filteredMembers]);
+
+  // Product search modal keyboard navigation
+  useEffect(() => {
+    if (showProductSearchModal) {
+      const handleKey = (e) => {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSelectedProductIndex(i => Math.min(i + 1, filteredProductsForModal.length - 1));
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSelectedProductIndex(i => Math.max(i - 1, 0));
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (filteredProductsForModal[selectedProductIndex]) {
+            addToCart(filteredProductsForModal[selectedProductIndex]);
+            setShowProductSearchModal(false);
+            setSearch('');
+            setSelectedProductIndex(0);
+          }
+        } else if (e.key === 'Escape') {
+          setShowProductSearchModal(false);
+          setSearch('');
+          setSelectedProductIndex(0);
+        }
+      };
+      window.addEventListener('keydown', handleKey);
+      return () => window.removeEventListener('keydown', handleKey);
+    }
+  }, [showProductSearchModal, selectedProductIndex, filteredProductsForModal]);
 
   // Discount adjustment Enter handler
   useEffect(() => {
@@ -657,6 +910,7 @@ function DashboardPage({ products, members, onCheckout }) {
           e.preventDefault();
           const discountValue = parseFloat(customDiscount);
           if (!isNaN(discountValue) && discountValue > 0) {
+            setConfirmedDiscount(discountValue); // Persist the confirmed discount
             setEditingDiscount(false);
           } else {
             alert('请输入有效折扣倍数（如 0.8 表示8折）');
@@ -679,6 +933,7 @@ function DashboardPage({ products, members, onCheckout }) {
           e.preventDefault();
           const totalValue = parseFloat(customTotal);
           if (!isNaN(totalValue) && totalValue >= 0) {
+            setConfirmedTotal(totalValue); // Persist the confirmed total price
             setEditingTotal(false);
           } else {
             alert('请输入有效价格');
@@ -754,12 +1009,11 @@ function DashboardPage({ products, members, onCheckout }) {
           ))}
         </div>
         <div className="flex gap-3 mb-4">
-          <div className="flex-1 relative">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="搜索商品名称、品牌或条码..."
-              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
+          <button onClick={() => { setSearch(''); setSelectedProductIndex(0); setShowProductSearchModal(true); }}
+            className="flex-1 flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors">
+            <SearchIcon className="w-4 h-4" />
+            <span className="text-sm">搜索商品 (F3)</span>
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -815,35 +1069,131 @@ function DashboardPage({ products, members, onCheckout }) {
                 <span className={"ml-2 text-xs px-2 py-0.5 rounded-full " + level.bg + " " + level.color}>{level.name}</span>
                 <span className="ml-2 text-xs text-gray-400">积分 {member.points || 0}</span>
               </div>
-              <button onClick={() => { setMemberId(''); setMemberSearch(''); }} className="text-gray-400 hover:text-gray-600"><CloseIcon className="w-4 h-4" /></button>
+              <button onClick={() => { setMemberId(''); setConfirmedDiscount(null); setConfirmedTotal(null); setMemberSearch(''); }} className="text-gray-400 hover:text-gray-600"><CloseIcon className="w-4 h-4" /></button>
             </div>
           ) : (
-            <div className="relative">
-              <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-              <input ref={memberSearchRef} value={memberSearch}
-                onChange={e => { setMemberSearch(e.target.value); setMemberSearching(true); }}
-                onBlur={() => setTimeout(() => setMemberSearching(false), 200)}
-                onFocus={() => memberSearch.trim() && setMemberSearching(true)}
-                placeholder={members.length === 0 ? '暂无会员' : '搜索会员 (F2)'}
-                className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              {memberSearching && filteredMembers.length > 0 && (
-                <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-40 overflow-y-auto">
-                  {filteredMembers.map(m => {
-                    const lv = getLevel(m.points);
-                    return (
-                      <button key={m.id} onClick={() => { setMemberId(m.id); setMemberSearch(''); setMemberSearching(false); }}
-                        className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors text-sm border-b border-gray-50 last:border-0">
-                        <span className="font-medium">{m.name}</span>
-                        <span className="text-gray-400 ml-2">{m.phone || ''}</span>
-                        <span className={"ml-2 text-xs px-1.5 py-0.5 rounded-full " + lv.bg + " " + lv.color}>{lv.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <button onClick={() => { setMemberSearch(''); setSelectedMemberIndex(0); setShowMemberSearchModal(true); }}
+              className="w-full flex items-center gap-2 text-sm text-gray-400 hover:text-blue-600 transition-colors py-1.5">
+              <UsersIcon className="w-4 h-4" />
+              <span>{members.length === 0 ? '暂无会员' : '搜索会员 (F2)'}</span>
+            </button>
           )}
         </div>
+
+        {/* 会员搜索弹窗 */}
+        {showMemberSearchModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4" onClick={() => setShowMemberSearchModal(false)}>
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="font-semibold text-gray-800">搜索会员</h3>
+                <button onClick={() => { setShowMemberSearchModal(false); setMemberSearch(''); setSelectedMemberIndex(0); }} className="text-gray-400 hover:text-gray-600"><CloseIcon className="w-5 h-5" /></button>
+              </div>
+              <div className="p-4">
+                <div className="relative mb-3">
+                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input value={memberSearch} onChange={e => { setMemberSearch(e.target.value); setSelectedMemberIndex(0); }}
+                    autoFocus
+                    placeholder="输入姓名或手机号搜索..."
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div className="max-h-64 overflow-y-auto space-y-1">
+                  {filteredMembers.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 text-sm">
+                      {memberSearch.trim() ? '未找到匹配会员' : '按 ↑↓ 键选择，回车确认'}
+                    </div>
+                  ) : (
+                    filteredMembers.map((m, idx) => {
+                      const lv = getLevel(m.points);
+                      return (
+                        <button key={m.id} onClick={() => { setMemberId(m.id); setConfirmedDiscount(null); setConfirmedTotal(null); setShowMemberSearchModal(false); setMemberSearch(''); setSelectedMemberIndex(0); }}
+                          onMouseEnter={() => setSelectedMemberIndex(idx)}
+                          className={"w-full text-left px-3 py-2.5 rounded-lg transition-colors text-sm " +
+                            (idx === selectedMemberIndex ? 'bg-blue-50 border border-blue-300' : 'hover:bg-gray-50 border border-transparent')}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-medium text-gray-800">{m.name}</span>
+                              {m.phone && <span className="text-gray-400 ml-2">{m.phone}</span>}
+                            </div>
+                            <span className={"text-xs px-2 py-0.5 rounded-full " + lv.bg + " " + lv.color}>{lv.name}</span>
+                          </div>
+                          <div className="text-xs text-gray-400 mt-0.5">积分 {m.points || 0}</div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-400 text-center">
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px]">↑↓</kbd> 选择
+                  <span className="mx-2">|</span>
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px]">Enter</kbd> 确认
+                  <span className="mx-2">|</span>
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px]">Esc</kbd> 取消
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 商品搜索弹窗 */}
+        {showProductSearchModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4" onClick={() => setShowProductSearchModal(false)}>
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="font-semibold text-gray-800">搜索商品</h3>
+                <button onClick={() => { setShowProductSearchModal(false); setSearch(''); setSelectedProductIndex(0); }} className="text-gray-400 hover:text-gray-600"><CloseIcon className="w-5 h-5" /></button>
+              </div>
+              <div className="p-4">
+                <div className="relative mb-3">
+                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input value={search} onChange={e => { setSearch(e.target.value); setSelectedProductIndex(0); }}
+                    autoFocus
+                    placeholder="输入商品名称、品牌或条码搜索..."
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div className="max-h-80 overflow-y-auto space-y-1">
+                  {filteredProductsForModal.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 text-sm">
+                      {search.trim() ? '未找到匹配商品' : '按 ↑↓ 键选择，回车加入购物车'}
+                    </div>
+                  ) : (
+                    filteredProductsForModal.map((p, idx) => {
+                      const cat = CATEGORIES.find(c => c.id === p.category);
+                      const outOfStock = (p.stock || 0) < 1;
+                      return (
+                        <button key={p.id} onClick={() => { if (!outOfStock) { addToCart(p); setShowProductSearchModal(false); setSearch(''); setSelectedProductIndex(0); } }}
+                          onMouseEnter={() => setSelectedProductIndex(idx)}
+                          disabled={outOfStock}
+                          className={"w-full text-left px-3 py-2.5 rounded-lg transition-colors text-sm " +
+                            (outOfStock ? 'opacity-50 cursor-not-allowed ' : '') +
+                            (idx === selectedProductIndex ? 'bg-blue-50 border border-blue-300' : 'hover:bg-gray-50 border border-transparent')}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium text-gray-800">{p.name}</span>
+                              {p.brand && <span className="text-gray-400 ml-2 text-xs">{p.brand}</span>}
+                            </div>
+                            <span className="text-blue-600 font-bold ml-2">¥{fmt(p.price)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {cat && <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{cat.name}</span>}
+                            <span className="text-xs text-gray-400">库存 {p.stock || 0}</span>
+                            {outOfStock && <span className="text-xs text-red-400">缺货</span>}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-400 text-center">
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px]">↑↓</kbd> 选择
+                  <span className="mx-2">|</span>
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px]">Enter</kbd> 加入购物车
+                  <span className="mx-2">|</span>
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px]">Esc</kbd> 取消
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-4 py-3">
           {cart.length === 0 ? (
@@ -853,20 +1203,48 @@ function DashboardPage({ products, members, onCheckout }) {
             </div>
           ) : (
             <div className="space-y-2">
-              {cart.map(item => (
-                <div key={item.id} className="flex items-center gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-700 truncate">{item.name}</p>
-                    <p className="text-xs text-gray-400">¥{fmt(item.price)} × {item.qty}</p>
+              {cart.map(item => {
+                const effectivePrice = getItemEffectivePrice(item);
+                const effectiveDiscount = getItemEffectiveDiscount(item);
+                const hasCustomPrice = confirmedItemPrices[item.id] !== undefined;
+                const hasCustomDiscount = confirmedItemDiscounts[item.id] !== undefined && confirmedItemDiscounts[item.id] < 1.0;
+                const itemTotal = effectivePrice * effectiveDiscount * item.qty;
+                
+                return (
+                  <div key={item.id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors group">
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openItemEdit(item.id)}>
+                      <div className="flex items-center justify-between">
+                        <p className={`text-sm font-medium truncate ${hasCustomPrice ? 'text-blue-600' : 'text-gray-700'}`}>
+                          {item.name}
+                          {hasCustomPrice && <span className="ml-1 text-xs text-blue-500">(改价)</span>}
+                          {hasCustomDiscount && <span className="ml-1 text-xs text-orange-500">({Math.round((1 - effectiveDiscount) * 100)}%off)</span>}
+                        </p>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); openItemEdit(item.id); }}
+                          className="opacity-0 group-hover:opacity-100 text-blue-500 hover:text-blue-700 transition-opacity"
+                          title="编辑数量、价格和折扣">
+                          <EditIcon className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                        <span>¥{fmt(effectivePrice)}</span>
+                        {effectiveDiscount < 1.0 && (
+                          <>
+                            <span>×</span>
+                            <span className="text-orange-500">{(effectiveDiscount * 100).toFixed(0)}%</span>
+                          </>
+                        )}
+                        <span>× {item.qty}</span>
+                        <span className="text-gray-300">=</span>
+                        <span className="font-medium text-gray-600">¥{fmt(itemTotal)}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button onClick={() => removeFromCart(item.id)} className="text-red-400 hover:text-red-600"><TrashIcon className="w-3.5 h-3.5" /></button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => updateQty(item.id, -1)} className="w-6 h-6 rounded flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600"><MinusIcon className="w-3 h-3" /></button>
-                    <span className="w-6 text-center text-sm">{item.qty}</span>
-                    <button onClick={() => updateQty(item.id, 1)} className="w-6 h-6 rounded flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600"><PlusIcon className="w-3 h-3" /></button>
-                    <button onClick={() => removeFromCart(item.id)} className="ml-1 text-red-400 hover:text-red-600"><TrashIcon className="w-3.5 h-3.5" /></button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -884,14 +1262,14 @@ function DashboardPage({ products, members, onCheckout }) {
                   className="w-20 px-2 py-1 border border-orange-400 rounded text-right text-sm font-medium text-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="0.85" autoFocus />
                 <span className="text-xs text-gray-400">如 0.85 表示85折，回车确认</span>
-                <button onClick={() => { setEditingDiscount(false); setCustomDiscount(''); }}
+                <button onClick={() => { setEditingDiscount(false); setCustomDiscount(''); setConfirmedDiscount(null); }}
                   className="text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap">取消</button>
               </div>
             ) : (
               <div className="flex justify-between items-center text-sm text-gray-500">
                 <div className="flex items-center gap-1.5">
                   <span>折扣</span>
-                  {discount < 1.0 && <span className="text-xs text-orange-500">({level.name} {(1 - discount) * 100}%off)</span>}
+                  {discount < 1.0 && <span className="text-xs text-orange-500">({level.name} {Math.round((1 - discount) * 100)}%off)</span>}
                   <button onClick={() => { setEditingDiscount(true); setCustomDiscount(String(discount)); }}
                     className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-0.5" title="修改折扣">
                     <EditIcon className="w-3 h-3" />
@@ -909,7 +1287,7 @@ function DashboardPage({ products, members, onCheckout }) {
                   className="flex-1 px-2 py-1 border border-blue-400 rounded text-right text-lg font-bold text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="0.00" autoFocus />
                 <span className="text-xs text-gray-400 whitespace-nowrap">回车确认</span>
-                <button onClick={() => { setEditingTotal(false); setCustomTotal(''); }}
+                <button onClick={() => { setEditingTotal(false); setCustomTotal(''); setConfirmedTotal(null); }}
                   className="text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap">取消</button>
               </div>
             ) : (
@@ -927,10 +1305,10 @@ function DashboardPage({ products, members, onCheckout }) {
             <div className="flex items-center gap-2 pt-1">
               <span className="text-sm text-gray-500 whitespace-nowrap">收款</span>
               <span className="text-sm text-gray-400">¥</span>
-              <input type="number" min="0" step="0.01" value={receivedAmount}
-                onChange={e => setReceivedAmount(e.target.value)}
+              <input ref={receivedAmountRef} type="number" min="0" step="0.01" value={receivedAmount}
+                onChange={e => { setReceivedAmount(e.target.value); setReceivedAmountManuallyEdited(true); }}
                 className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="输入收款金额" />
+                placeholder="输入收款金额 (F4)" />
             </div>
             {receivedAmount && parseFloat(receivedAmount) >= finalTotal && (
               <div className="flex justify-between items-center text-sm pt-1 border-t border-dashed border-gray-200">
@@ -988,11 +1366,11 @@ function DashboardPage({ products, members, onCheckout }) {
             <div className="px-6 py-5 space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">支付方式</span>
-                <span className="font-medium text-gray-700">{PAYMENT_METHODS.find(p => p.id === paymentMethod)?.name || '现金'}</span>
+                <span className="font-medium text-gray-700">{PAYMENT_METHODS.find(p => p.id === lastPaymentMethod)?.name || '现金'}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">应收金额</span>
-                <span className="font-bold text-blue-600 text-lg">¥{fmt(finalTotal || 0)}</span>
+                <span className="font-bold text-blue-600 text-lg">¥{fmt(lastTotal)}</span>
               </div>
               {lastChange > 0 && (
                 <div className="flex justify-between text-sm">
@@ -1008,6 +1386,163 @@ function DashboardPage({ products, members, onCheckout }) {
           </div>
         </div>
       )}
+      
+      {/* Item Edit Modal */}
+      {editingItemId && (() => {
+        const item = cart.find(i => i.id === editingItemId);
+        if (!item) return null;
+        
+        const currentPrice = getItemEffectivePrice(item);
+        const currentDiscount = getItemEffectiveDiscount(item);
+        const tempPrice = itemCustomPrices[editingItemId] !== undefined ? 
+          parseFloat(itemCustomPrices[editingItemId]) : currentPrice;
+        const tempDiscount = itemCustomDiscounts[editingItemId] !== undefined ? 
+          parseFloat(itemCustomDiscounts[editingItemId]) : currentDiscount;
+        
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={closeItemEdit}>
+            <div className="bg-white rounded-2xl shadow-2xl w-96 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 text-white">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <EditIcon className="w-5 h-5" />
+                  编辑商品
+                </h3>
+                <p className="text-sm text-blue-100 mt-1 truncate">{item.name}</p>
+              </div>
+              
+              <div className="px-6 py-5 space-y-4">
+                {/* Current Info */}
+                <div className="p-3 bg-gray-50 rounded-lg space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">原价</span>
+                    <span className="font-medium">¥{fmt(item.price)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 pt-2">
+                    <span className="text-gray-500">当前小计</span>
+                    <span className="font-bold text-blue-600">¥{fmt(currentPrice * currentDiscount * item.qty)}</span>
+                  </div>
+                </div>
+                
+                {/* Quantity Edit */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    数量 <span className="text-xs text-gray-400">(库存: {item.stock || 0})</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => updateQty(editingItemId, -1)} 
+                      disabled={item.qty <= 1}
+                      className="w-10 h-10 rounded-lg flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                      <MinusIcon className="w-4 h-4" />
+                    </button>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max={item.stock || 999}
+                      value={item.qty}
+                      onChange={e => setItemQty(editingItemId, e.target.value)}
+                      autoFocus
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-center text-lg font-bold"
+                    />
+                    <button 
+                      onClick={() => updateQty(editingItemId, 1)} 
+                      disabled={item.qty >= (item.stock || 999)}
+                      className="w-10 h-10 rounded-lg flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                      <PlusIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Price Edit */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    修改单价 <span className="text-xs text-gray-400">(可选)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-500">¥</span>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      step="0.01" 
+                      value={itemCustomPrices[editingItemId] !== undefined ? itemCustomPrices[editingItemId] : ''}
+                      onChange={e => updateItemCustomPrice(e.target.value)}
+                      placeholder={currentPrice.toFixed(2)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-right font-medium"
+                    />
+                  </div>
+                  {itemCustomPrices[editingItemId] && (
+                    <p className="text-xs text-blue-500 mt-1">
+                      新价格: ¥{tempPrice.toFixed(2)} 
+                      {tempPrice !== currentPrice && (
+                        <span className="ml-1">
+                          ({tempPrice > currentPrice ? '↑' : '↓'}{Math.abs(((tempPrice - currentPrice) / currentPrice * 100)).toFixed(1)}%)
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
+                
+                {/* Discount Edit */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    修改折扣 <span className="text-xs text-gray-400">(可选)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      min="0.01" 
+                      max="1" 
+                      step="0.01" 
+                      value={itemCustomDiscounts[editingItemId] !== undefined ? itemCustomDiscounts[editingItemId] : ''}
+                      onChange={e => updateItemCustomDiscount(e.target.value)}
+                      placeholder={(currentDiscount * 100).toFixed(0) + '%'}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-right font-medium"
+                    />
+                    <span className="text-gray-500 text-sm">折</span>
+                  </div>
+                  {itemCustomDiscounts[editingItemId] && (
+                    <p className="text-xs text-orange-500 mt-1">
+                      新折扣: {(tempDiscount * 100).toFixed(0)}% off
+                      {tempDiscount < 1.0 && (
+                        <span className="ml-1">
+                          (省 ¥{fmt((1 - tempDiscount) * currentPrice * item.qty)})
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
+                
+                {/* Preview */}
+                {(itemCustomPrices[editingItemId] || itemCustomDiscounts[editingItemId]) && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-600 font-medium mb-1">预计小计</p>
+                    <p className="text-xl font-bold text-blue-700">
+                      ¥{fmt(tempPrice * tempDiscount * item.qty)}
+                    </p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="px-6 py-4 border-t border-gray-200 flex gap-2">
+                <button 
+                  onClick={closeItemEdit}
+                  className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium">
+                  取消 (Esc)
+                </button>
+                <button 
+                  onClick={() => {
+                    confirmItemPrice();
+                    confirmItemDiscount();
+                  }}
+                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                  确认修改
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      
       {showShortcuts && (
         <Modal title="快捷键帮助" onClose={() => setShowShortcuts(false)}>
           <div className="space-y-3">
@@ -1579,6 +2114,18 @@ function StatsPage({ sales, products, onDeleteSale }) {
     const totalItems = filtered.reduce((s, sale) => s + sale.items.reduce((c, i) => c + i.qty, 0), 0);
     const avgOrder = totalCount > 0 ? totalRevenue / totalCount : 0;
 
+    // Calculate total cost and profit
+    let totalCost = 0;
+    filtered.forEach(s => {
+      s.items.forEach(item => {
+        const product = products.find(p => p.id === item.id);
+        const cost = product ? (product.cost || 0) : 0;
+        totalCost += cost * item.qty;
+      });
+    });
+    const totalProfit = totalRevenue - totalCost;
+    const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue * 100) : 0;
+
     // 按日期汇总
     const byDate = {};
     filtered.forEach(s => {
@@ -1599,7 +2146,7 @@ function StatsPage({ sales, products, onDeleteSale }) {
     });
     const categoryData = Object.entries(byCategory).map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 }));
 
-    return { filtered, totalRevenue, totalCount, totalItems, avgOrder, chartData, categoryData };
+    return { filtered, totalRevenue, totalCount, totalItems, avgOrder, totalCost, totalProfit, profitMargin, chartData, categoryData };
   }, [sales, products, period]);
 
   const pieColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
@@ -1624,11 +2171,31 @@ function StatsPage({ sales, products, onDeleteSale }) {
       ) : (
         <>
           {/* 统计卡片 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
             <StatCard icon={MoneyIcon} label="营业总额" value={"¥" + fmt(stats.totalRevenue)} color="text-blue-600" />
             <StatCard icon={ReceiptIcon} label="订单数量" value={stats.totalCount + " 笔"} color="text-green-600" />
             <StatCard icon={BoxIcon} label="销售件数" value={stats.totalItems + " 件"} color="text-purple-600" />
             <StatCard icon={TrendIcon} label="客单价" value={"¥" + fmt(stats.avgOrder)} color="text-orange-600" />
+            <StatCard 
+              icon={TagIcon} 
+              label="总成本" 
+              value={"¥" + fmt(stats.totalCost)} 
+              color="text-gray-600" 
+            />
+            <StatCard 
+              icon={TrendIcon} 
+              label="总利润" 
+              value={"¥" + fmt(stats.totalProfit)} 
+              color={stats.totalProfit >= 0 ? "text-green-600" : "text-red-600"} 
+            />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+            <StatCard 
+              icon={ChartIcon} 
+              label="利润率" 
+              value={fmt(stats.profitMargin) + "%"} 
+              color={stats.profitMargin >= 0 ? "text-green-600" : "text-red-600"} 
+            />
           </div>
 
           {/* 图表 */}
@@ -1710,302 +2277,411 @@ function StatsPage({ sales, products, onDeleteSale }) {
   );
 }
 
-// ===== IndexedDB 持久化存储 =====
-const DB_NAME = 'cosmetics_store';
+// ===== IndexedDB 本地存储 =====
+const DB_NAME = 'cosmetics_store_v2';
 const DB_VERSION = 1;
-const DB_STORES = ['products', 'members', 'sales', 'pointsRecords'];
+const STORES = ['products', 'members', 'sales', 'pointsRecords', 'meta'];
+
+let dbInstance = null;
 
 function openDB() {
+  if (dbInstance) return Promise.resolve(dbInstance);
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
-      DB_STORES.forEach(s => {
-        if (!db.objectStoreNames.contains(s)) {
-          db.createObjectStore(s, { keyPath: 'id' });
+      for (const store of STORES) {
+        if (!db.objectStoreNames.contains(store)) {
+          db.createObjectStore(store, { keyPath: 'id' });
         }
-      });
+      }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => { dbInstance = req.result; resolve(dbInstance); };
     req.onerror = () => reject(req.error);
   });
 }
 
-async function dbGetAll(storeName) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readonly');
-    const req = tx.objectStore(storeName).getAll();
+function dbGetAll(table) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(table, 'readonly');
+    const req = tx.objectStore(table).getAll();
     req.onsuccess = () => resolve(req.result || []);
     req.onerror = () => reject(req.error);
-  });
+  }));
 }
 
-async function dbPutAll(storeName, items) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readwrite');
-    const store = tx.objectStore(storeName);
+function dbPutAll(table, items) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(table, 'readwrite');
+    const store = tx.objectStore(table);
+    // 先清空再插入
     store.clear();
-    items.forEach(item => store.put(item));
+    for (const item of items) {
+      store.put(item);
+    }
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
-  });
+  }));
 }
 
-// 请求永久存储（防止浏览器自动清理）
-async function requestPersistentStorage() {
-  if (navigator.storage && navigator.storage.persist) {
-    try {
-      const isPersisted = await navigator.storage.persisted();
-      if (!isPersisted) {
-        await navigator.storage.persist();
-      }
-    } catch (e) { /* 部分浏览器不支持，忽略 */ }
+function metaGet(key) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('meta', 'readonly');
+    const req = tx.objectStore('meta').get(key);
+    req.onsuccess = () => resolve(req.result ? req.result.value : null);
+    req.onerror = () => reject(req.error);
+  })).catch(() => null);
+}
+
+function metaSet(key, value) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('meta', 'readwrite');
+    tx.objectStore('meta').put({ id: key, value });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+
+// 初始化：从 IndexedDB 加载全部数据
+async function initFromIndexedDB() {
+  try {
+    const [p, m, s, r] = await Promise.all([
+      dbGetAll('products'), dbGetAll('members'), dbGetAll('sales'), dbGetAll('pointsRecords'),
+    ]);
+    return { products: p, members: m, sales: s, pointsRecords: r };
+  } catch (e) {
+    console.error('IndexedDB 加载失败:', e);
+    return { products: [], members: [], sales: [], pointsRecords: [] };
   }
 }
 
-// ===== SQLite 导出/导入 =====
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector('script[src="' + src + '"]')) return resolve();
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('加载失败: ' + src));
-    document.head.appendChild(s);
-  });
+// 数据变更同步到 IndexedDB（防抖）
+let syncTimer = null;
+function syncToIndexedDB(products, members, sales, pointsRecords) {
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(async () => {
+    try {
+      await Promise.all([
+        dbPutAll('products', products),
+        dbPutAll('members', members),
+        dbPutAll('sales', sales),
+        dbPutAll('pointsRecords', pointsRecords),
+      ]);
+      console.log('数据已保存到本地');
+    } catch (e) {
+      console.error('保存到本地失败:', e);
+    }
+  }, 300);
 }
 
+// ===== 局域网同步 =====
+async function pushToServer(serverUrl, data) {
+  const res = await fetch(serverUrl + '/api/data', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      products: data.products,
+      members: data.members,
+      sales: data.sales,
+      pointsRecords: data.pointsRecords,
+    }),
+  });
+  if (!res.ok) throw new Error('推送数据失败: ' + res.status);
+}
+
+async function pullFromServer(serverUrl) {
+  const res = await fetch(serverUrl + '/api/data');
+  if (!res.ok) throw new Error('拉取数据失败: ' + res.status);
+  return res.json();
+}
+
+// 合并数据：按 updatedAt 时间戳取较新版本
+function mergeArrays(localArr, serverArr) {
+  const localMap = new Map();
+  for (const item of localArr) localMap.set(item.id, item);
+  const serverMap = new Map();
+  for (const item of serverArr) serverMap.set(item.id, item);
+
+  const allIds = new Set([...localMap.keys(), ...serverMap.keys()]);
+  const merged = [];
+  for (const id of allIds) {
+    const local = localMap.get(id);
+    const server = serverMap.get(id);
+    if (!local) { merged.push(server); continue; }
+    if (!server) { merged.push(local); continue; }
+    const lt = new Date(local.updatedAt || local.createdAt || 0).getTime();
+    const st = new Date(server.updatedAt || server.createdAt || 0).getTime();
+    merged.push(st >= lt ? server : local);
+  }
+  return merged;
+}
+
+function arraysEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+// 通用下载
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
-const SQL_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js';
-const SQL_JS_WASM = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/';
+// 导出全部数据为 Excel 文件
+async function exportToJSON() {
+  const [p, m, s, r] = await Promise.all([
+    dbGetAll('products'), dbGetAll('members'), dbGetAll('sales'), dbGetAll('pointsRecords'),
+  ]);
 
-async function ensureSqlJs() {
-  await loadScript(SQL_JS_CDN);
-  const SQL = await window.initSqlJs({ locateFile: f => SQL_JS_WASM + f });
-  return SQL;
+  // 获取分类名称
+  const getCategoryName = (catId) => {
+    const cat = CATEGORIES.find(c => c.id === catId);
+    return cat ? cat.name : catId || '';
+  };
+  // 获取会员等级名称
+  const getLevelName = (levelId) => {
+    const lv = MEMBER_LEVELS.find(l => l.id === levelId);
+    return lv ? lv.name : levelId || '';
+  };
+
+  // 构建商品 sheet 数据
+  const productRows = p.map(item => ({
+    '商品名称': item.name || '',
+    '分类': getCategoryName(item.category),
+    '售价': item.price || 0,
+    '成本价': item.cost || 0,
+    '利润': (item.price || 0) - (item.cost || 0),
+    '库存': item.stock || 0,
+    '条码': item.barcode || '',
+    '单位': item.unit || '',
+    '创建时间': item.createdAt ? fmtDate(item.createdAt) : '',
+  }));
+
+  // 构建会员 sheet 数据
+  const memberRows = m.map(item => ({
+    '姓名': item.name || '',
+    '手机号': item.phone || '',
+    '等级': getLevelName(item.level),
+    '积分': item.points || 0,
+    '生日': item.birthday || '',
+    '备注': item.note || '',
+    '创建时间': item.createdAt ? fmtDate(item.createdAt) : '',
+  }));
+
+  // 构建销售记录 sheet 数据
+  const salesRows = s.map(item => ({
+    '订单号': item.id || '',
+    '日期': item.date || '',
+    '商品明细': typeof item.itemsJson === 'string' ? item.itemsJson : JSON.stringify(item.items || item.itemsJson || []),
+    '小计': item.subtotal || 0,
+    '总计': item.total || 0,
+    '会员': item.memberName || '',
+    '创建时间': item.createdAt ? fmtDate(item.createdAt) : '',
+  }));
+
+  // 构建积分记录 sheet 数据
+  const pointsRows = r.map(item => ({
+    '会员': item.memberName || '',
+    '积分': item.points || 0,
+    '类型': item.type || '',
+    '说明': item.description || '',
+    '日期': item.date || '',
+    '创建时间': item.createdAt ? fmtDate(item.createdAt) : '',
+  }));
+
+  // 生成 Excel
+  const wb = XLSX.utils.book_new();
+  if (productRows.length > 0) {
+    const ws1 = XLSX.utils.json_to_sheet(productRows);
+    ws1['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 16 }, { wch: 6 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ws1, '商品');
+  }
+  if (memberRows.length > 0) {
+    const ws2 = XLSX.utils.json_to_sheet(memberRows);
+    ws2['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 20 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ws2, '会员');
+  }
+  if (salesRows.length > 0) {
+    const ws3 = XLSX.utils.json_to_sheet(salesRows);
+    ws3['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 40 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ws3, '销售记录');
+  }
+  if (pointsRows.length > 0) {
+    const ws4 = XLSX.utils.json_to_sheet(pointsRows);
+    ws4['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 20 }, { wch: 12 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ws4, '积分记录');
+  }
+
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  return new Blob([wbout], { type: 'application/octet-stream' });
 }
 
-async function exportToSQLite(products, members, sales, pointsRecords) {
-  const SQL = await ensureSqlJs();
-  const db = new SQL.Database();
+// 从 Excel 文件导入数据
+async function importFromJSON(file) {
+  const data = await file.arrayBuffer();
+  const wb = XLSX.read(data, { type: 'array' });
 
-  db.run(`CREATE TABLE products (id TEXT PRIMARY KEY, name TEXT, barcode TEXT, brand TEXT, category TEXT, price REAL, stock INTEGER, cost REAL, sku TEXT, createdAt TEXT)`);
-  db.run(`CREATE TABLE members (id TEXT PRIMARY KEY, name TEXT, phone TEXT, birthday TEXT, address TEXT, points INTEGER, createdAt TEXT)`);
-  db.run(`CREATE TABLE sales (id TEXT PRIMARY KEY, date TEXT, createdAt TEXT, itemsJson TEXT, subtotal REAL, total REAL, memberId TEXT, memberName TEXT, levelName TEXT)`);
-  db.run(`CREATE TABLE points_records (id TEXT PRIMARY KEY, memberId TEXT, memberName TEXT, points INTEGER, type TEXT, description TEXT, date TEXT, createdAt TEXT)`);
+  const parseSheet = (name) => {
+    const sheet = wb.Sheets[name];
+    if (!sheet) return [];
+    return XLSX.utils.sheet_to_json(sheet);
+  };
 
-  products.forEach(p => {
-    db.run('INSERT INTO products VALUES (?,?,?,?,?,?,?,?,?,?)',
-      [p.id, p.name, p.barcode, p.brand, p.category, p.price, p.stock, p.cost, p.sku, p.createdAt]);
-  });
-  members.forEach(m => {
-    db.run('INSERT INTO members VALUES (?,?,?,?,?,?,?)',
-      [m.id, m.name, m.phone, m.birthday, m.address, m.points, m.createdAt]);
-  });
-  sales.forEach(s => {
-    db.run('INSERT INTO sales VALUES (?,?,?,?,?,?,?,?)',
-      [s.id, s.date, s.createdAt, JSON.stringify(s.items), s.subtotal, s.total, s.memberId, s.memberName, s.levelName]);
-  });
-  pointsRecords.forEach(r => {
-    db.run('INSERT INTO points_records VALUES (?,?,?,?,?,?,?,?)',
-      [r.id, r.memberId, r.memberName, r.points, r.type, r.description, r.date, r.createdAt]);
-  });
+  const productRows = parseSheet('商品');
+  const memberRows = parseSheet('会员');
+  const salesRows = parseSheet('销售记录');
+  const pointsRows = parseSheet('积分记录');
 
-  const data = db.export();
-  db.close();
-  return new Blob([data], { type: 'application/x-sqlite3' });
-}
+  // 转换商品数据
+  const products = productRows.map(row => ({
+    id: uid(),
+    name: row['商品名称'] || '',
+    category: CATEGORIES.find(c => c.name === row['分类'])?.id || row['分类'] || '',
+    price: parseFloat(row['售价']) || 0,
+    cost: parseFloat(row['成本价']) || 0,
+    stock: parseInt(row['库存']) || 0,
+    barcode: row['条码'] || '',
+    unit: row['单位'] || '',
+    createdAt: row['创建时间'] ? new Date(row['创建时间']).toISOString() : new Date().toISOString(),
+  }));
 
-async function importFromSQLite(file) {
-  const SQL = await ensureSqlJs();
-  const buf = await file.arrayBuffer();
-  const db = new SQL.Database(new Uint8Array(buf));
+  // 转换会员数据
+  const members = memberRows.map(row => ({
+    id: uid(),
+    name: row['姓名'] || '',
+    phone: row['手机号'] || '',
+    level: MEMBER_LEVELS.find(l => l.name === row['等级'])?.id || row['等级'] || '',
+    points: parseInt(row['积分']) || 0,
+    birthday: row['生日'] || '',
+    note: row['备注'] || '',
+    createdAt: row['创建时间'] ? new Date(row['创建时间']).toISOString() : new Date().toISOString(),
+  }));
 
-  const products = [];
-  db.exec('SELECT * FROM products')[0]?.values.forEach(row => {
-    products.push({ id: row[0], name: row[1], barcode: row[2], brand: row[3], category: row[4], price: row[5], stock: row[6], cost: row[7], sku: row[8], createdAt: row[9] });
-  });
-  const members = [];
-  db.exec('SELECT * FROM members')[0]?.values.forEach(row => {
-    members.push({ id: row[0], name: row[1], phone: row[2], birthday: row[3], address: row[4], points: row[5], createdAt: row[6] });
-  });
-  const sales = [];
-  db.exec('SELECT * FROM sales')[0]?.values.forEach(row => {
-    sales.push({ id: row[0], date: row[1], createdAt: row[2], items: JSON.parse(row[3] || '[]'), subtotal: row[4], total: row[5], memberId: row[6], memberName: row[7], levelName: row[8] });
-  });
-  const pointsRecords = [];
-  db.exec('SELECT * FROM points_records')[0]?.values.forEach(row => {
-    pointsRecords.push({ id: row[0], memberId: row[1], memberName: row[2], points: row[3], type: row[4], description: row[5], date: row[6], createdAt: row[7] });
-  });
+  // 转换销售记录数据
+  const sales = salesRows.map(row => ({
+    id: row['订单号'] || uid(),
+    date: row['日期'] || '',
+    itemsJson: row['商品明细'] || '[]',
+    subtotal: parseFloat(row['小计']) || 0,
+    total: parseFloat(row['总计']) || 0,
+    memberId: '',
+    memberName: row['会员'] || '',
+    levelName: '',
+    createdAt: row['创建时间'] ? new Date(row['创建时间']).toISOString() : new Date().toISOString(),
+  }));
 
-  db.close();
+  // 转换积分记录数据
+  const pointsRecords = pointsRows.map(row => ({
+    id: uid(),
+    memberId: '',
+    memberName: row['会员'] || '',
+    points: parseInt(row['积分']) || 0,
+    type: row['类型'] || '',
+    description: row['说明'] || '',
+    date: row['日期'] || '',
+    createdAt: row['创建时间'] ? new Date(row['创建时间']).toISOString() : new Date().toISOString(),
+  }));
+
+  await Promise.all([
+    dbPutAll('products', products),
+    dbPutAll('members', members),
+    dbPutAll('sales', sales),
+    dbPutAll('pointsRecords', pointsRecords),
+  ]);
+
   return { products, members, sales, pointsRecords };
 }
 
-// ===== 自动备份（File System Access API）=====
-const META_DB = 'cosmetics_meta';
-const META_STORE = 'kv';
+// ===== 同步设置弹窗 =====
+function SyncSettingsModal({ currentUrl, connected, onSave, onClose }) {
+  const [url, setUrl] = useState(currentUrl || '');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
 
-function openMetaDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(META_DB, 1);
-    req.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(META_STORE)) {
-        db.createObjectStore(META_STORE);
+  const handleTest = async () => {
+    const trimmed = url.trim().replace(/\/+$/, '');
+    if (!trimmed) { setTestResult('error'); return; }
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(trimmed + '/api/health');
+      if (res.ok) {
+        setTestResult('success');
+      } else {
+        setTestResult('error');
       }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function metaGet(key) {
-  const db = await openMetaDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(META_STORE, 'readonly');
-    const req = tx.objectStore(META_STORE).get(key);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => resolve(null);
-  });
-}
-
-async function metaSet(key, value) {
-  const db = await openMetaDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(META_STORE, 'readwrite');
-    tx.objectStore(META_STORE).put(value, key);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => resolve();
-  });
-}
-
-async function verifyDirPermission(handle) {
-  if (!handle) return false;
-  try {
-    if ((await handle.queryPermission({ mode: 'readwrite' })) === 'granted') return true;
-    // 需要用户手势才能 requestPermission，这里只查询不请求
-    return false;
-  } catch (e) { return false; }
-}
-
-async function requestDirPermission(handle) {
-  if (!handle) return false;
-  try {
-    return (await handle.requestPermission({ mode: 'readwrite' })) === 'granted';
-  } catch (e) { return false; }
-}
-
-async function pickBackupDir() {
-  if (!window.showDirectoryPicker) {
-    throw new Error('当前浏览器不支持文件夹选择，请使用 Chrome 或 Edge');
-  }
-  const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-  await metaSet('backupDirHandle', handle);
-  return handle;
-}
-
-async function getBackupDirHandle() {
-  return await metaGet('backupDirHandle');
-}
-
-async function writeBackupFile(handle, products, members, sales, pointsRecords) {
-  const blob = await exportToSQLite(products, members, sales, pointsRecords);
-  const now = new Date();
-  const ts = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0')
-    + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
-  const filename = `美妆门店备份_${ts}.sqlite`;
-  const fileHandle = await handle.getFileHandle(filename, { create: true });
-  const writable = await fileHandle.createWritable();
-  await writable.write(blob);
-  await writable.close();
-  await metaSet('lastBackupTime', now.toISOString());
-  return filename;
-}
-
-// ===== 登录弹窗 =====
-function LoginModal({ onLogin, onClose }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isRegister, setIsRegister] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!username.trim()) { alert('请输入用户名'); return; }
-    if (!password) { alert('请输入密码'); return; }
-    if (isRegister && password !== confirmPassword) { alert('两次密码不一致'); return; }
-    if (password.length < 4) { alert('密码至少4位'); return; }
-    setLoading(true);
-    const success = await onLogin(username.trim(), password, isRegister);
-    setLoading(false);
-    if (success) onClose();
+    } catch (e) {
+      setTestResult('error');
+    }
+    setTesting(false);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
-        <div className="absolute top-3/4 right-1/4 w-64 h-64 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" style={{animationDelay: '1s'}}></div>
-      </div>
-      <div className="relative bg-white bg-opacity-95 backdrop-blur-sm rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
-        <div className="bg-gradient-to-r from-pink-500 to-purple-600 px-6 py-6 text-center">
-          <div className="w-16 h-16 rounded-full bg-white bg-opacity-20 flex items-center justify-center mx-auto mb-3">
-            <LockIcon className="w-8 h-8 text-white" />
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-indigo-50 to-blue-50">
+          <div className="flex items-center gap-2">
+            <ServerIcon className="w-5 h-5 text-indigo-600" />
+            <h2 className="text-lg font-bold text-gray-800">局域网同步设置</h2>
           </div>
-          <h2 className="text-xl font-bold text-white">美妆门店管理系统</h2>
-          <p className="text-sm text-white text-opacity-80 mt-1">{isRegister ? '创建新账户' : '登录到云端'}</p>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><CloseIcon className="w-5 h-5" /></button>
         </div>
-        <div className="px-6 py-5 space-y-4">
+        <div className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">用户名</label>
-            <input value={username} onChange={e => setUsername(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="请输入用户名" autoFocus
-              onKeyDown={e => e.key === 'Enter' && handleSubmit()} />
+            <label className="block text-sm font-medium text-gray-700 mb-1">同步服务器地址</label>
+            <input
+              type="text"
+              value={url}
+              onChange={e => { setUrl(e.target.value); setTestResult(null); }}
+              placeholder="例如: http://192.168.1.100:3800"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+              autoFocus
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              在另一台电脑上运行 <code className="bg-gray-100 px-1 rounded">node sync-server.js</code> 后，将显示的地址填入上方
+            </p>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">密码</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="请输入密码"
-              onKeyDown={e => e.key === 'Enter' && handleSubmit()} />
-          </div>
-          {isRegister && (
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1">确认密码</label>
-              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                placeholder="再次输入密码"
-                onKeyDown={e => e.key === 'Enter' && handleSubmit()} />
+
+          {testResult === 'success' && (
+            <div className="flex items-center gap-2 text-green-600 text-sm bg-green-50 px-3 py-2 rounded-lg">
+              <CheckIcon className="w-4 h-4" /> 连接成功！
             </div>
           )}
-          <button onClick={handleSubmit} disabled={loading}
-            className="w-full py-2.5 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg hover:from-pink-600 hover:to-purple-700 transition-all font-medium disabled:opacity-50">
-            {loading ? '处理中...' : (isRegister ? '注册' : '登录')}
-          </button>
-          <div className="text-center">
-            <button onClick={() => { setIsRegister(!isRegister); setConfirmPassword(''); }}
-              className="text-sm text-purple-600 hover:text-purple-800 transition-colors">
-              {isRegister ? '已有账户？点击登录' : '没有账户？点击注册'}
+          {testResult === 'error' && (
+            <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg">
+              <CloseIcon className="w-4 h-4" /> 无法连接，请检查地址和网络
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 text-sm">
+            <span className={"w-2.5 h-2.5 rounded-full " + (connected ? "bg-green-400" : "bg-gray-300")} />
+            <span className="text-gray-600">{connected ? '已连接' : '未连接'}</span>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button onClick={handleTest} disabled={testing || !url.trim()}
+              className="flex-1 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors disabled:opacity-50">
+              {testing ? '测试中...' : '测试连接'}
+            </button>
+            <button onClick={() => onSave(url)}
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors">
+              保存
             </button>
           </div>
-          <button onClick={onClose}
-            className="w-full py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
-            暂不登录，继续使用本地数据
-          </button>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <p className="text-xs text-amber-800">
+              <strong>使用说明：</strong>两台电脑需在同一局域网内。在其中一台运行同步服务器，另一台填入服务器地址即可实时同步数据。数据存储在运行服务器的那台电脑上。
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -2019,56 +2695,84 @@ function App() {
   const [members, setMembers] = useState([]);
   const [sales, setSales] = useState([]);
   const [pointsRecords, setPointsRecords] = useState([]);
+  const initialLoadDoneRef = useRef(false);
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dbBusy, setDbBusy] = useState(false);
-  const [backupDirName, setBackupDirName] = useState('');
   const [lastBackupTime, setLastBackupTime] = useState('');
   const [backingUp, setBackingUp] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [showLogin, setShowLogin] = useState(false);
   const [scheduledBackupEnabled, setScheduledBackupEnabled] = useState(false);
 
-  // 初始化：从 IndexedDB 加载数据 + 请求永久存储
+  // 局域网同步状态
+  const [syncServerUrl, setSyncServerUrl] = useState('');
+  const [syncConnected, setSyncConnected] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [showSyncSettings, setShowSyncSettings] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(''); // '' | 'pushing' | 'pulling' | 'error'
+  const syncUrlRef = useRef('');
+  const isFromSyncRef = useRef(false);
+  const syncTimer2Ref = useRef(null);
+  const pushTimerRef = useRef(null);
+
+  // 初始化：从 IndexedDB 加载数据
   useEffect(() => {
     let done = false;
-    const finish = () => { if (!done) { done = true; setLoading(false); } };
-    const timer = setTimeout(finish, 3000); // 安全兜底：3秒后强制完成
+    const finish = () => { 
+      if (!done) { 
+        done = true; 
+        console.log('Loading complete, setting loading=false');
+        setLoading(false); 
+      } 
+    };
+    const timer = setTimeout(() => {
+      console.warn('Loading timeout - forcing finish after 3 seconds');
+      finish();
+    }, 3000); // 安全兜底：3秒后强制完成
     (async () => {
-      await requestPersistentStorage();
       try {
-        const [p, m, s, r] = await Promise.all([
-          dbGetAll('products'), dbGetAll('members'), dbGetAll('sales'), dbGetAll('pointsRecords'),
-        ]);
-        setProducts(p); setMembers(m); setSales(s); setPointsRecords(r);
+        console.log('从本地数据库加载数据...');
+        const data = await initFromIndexedDB();
+        console.log('Data loaded:', { products: data.products.length, members: data.members.length, sales: data.sales.length, pointsRecords: data.pointsRecords.length });
+        setProducts(data.products); setMembers(data.members); setSales(data.sales); setPointsRecords(data.pointsRecords);
+        initialLoadDoneRef.current = true;
       } catch (e) {
         console.error('加载数据失败', e);
+        console.error('Error details:', e.message, e.stack);
       }
       clearTimeout(timer);
       finish();
     })();
-    return () => clearTimeout(timer);
+    return () => {
+      console.log('Cleanup: clearing timer');
+      clearTimeout(timer);
+    };
   }, []);
 
-  // 登录状态检查 + 定时备份
+  // 数据变更自动保存到本地（初始加载完成后才生效）
+  useEffect(() => {
+    if (!initialLoadDoneRef.current) return;
+    syncToIndexedDB(products, members, sales, pointsRecords);
+  }, [products, members, sales, pointsRecords]);
+
+  // 加载备份设置和同步设置
   useEffect(() => {
     if (loading) return;
-    // 检查登录状态
     (async () => {
       try {
-        const user = await metaGet('currentUser');
-        if (user) {
-          setIsLoggedIn(true);
-          setCurrentUser(user);
-        }
         const backupSetting = await metaGet('scheduledBackup');
         if (backupSetting) setScheduledBackupEnabled(true);
+        const lastTime = await metaGet('lastBackupTime');
+        if (lastTime) setLastBackupTime(lastTime);
+        const syncUrl = await metaGet('syncServerUrl');
+        if (syncUrl) {
+          setSyncServerUrl(syncUrl);
+          syncUrlRef.current = syncUrl;
+        }
       } catch (e) { /* 忽略 */ }
     })();
   }, [loading]);
 
-  // 定时备份：每日22点自动备份
+  // 定时备份：每日22:00自动下载备份到本地
   useEffect(() => {
     if (loading || !scheduledBackupEnabled) return;
     let lastRunDate = '';
@@ -2077,14 +2781,13 @@ function App() {
       if (now.getHours() === 22 && now.getMinutes() === 0 && lastRunDate !== todayStr()) {
         lastRunDate = todayStr();
         try {
-          const handle = await getBackupDirHandle();
-          if (handle) {
-            const ok = await verifyDirPermission(handle);
-            if (ok) {
-              const filename = await writeBackupFile(handle, products, members, sales, pointsRecords);
-              console.log('定时备份完成:', filename);
-            }
-          }
+          const blob = await exportToJSON();
+          const ts = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0')
+            + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
+          downloadBlob(blob, '美妆门店备份_' + ts + '.xlsx');
+          await metaSet('lastBackupTime', now.toISOString());
+          setLastBackupTime(now.toISOString());
+          console.log('定时备份下载完成');
         } catch (e) {
           console.warn('定时备份失败:', e);
         }
@@ -2092,156 +2795,158 @@ function App() {
     };
     const timer = setInterval(checkBackup, 60000);
     return () => clearInterval(timer);
-  }, [loading, scheduledBackupEnabled, products, members, sales, pointsRecords]);
+  }, [loading, scheduledBackupEnabled]);
 
-  // 登录/注册
-  const handleLogin = async (username, password, isRegister) => {
-    try {
-      const msgBuffer = new TextEncoder().encode(password);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-      if (isRegister) {
-        const existing = await metaGet('user_' + username);
-        if (existing) { showToast('用户名已存在'); return false; }
-        const user = { username, passwordHash: hashHex, createdAt: new Date().toISOString() };
-        await metaSet('user_' + username, user);
-        await metaSet('currentUser', user);
-        setIsLoggedIn(true);
-        setCurrentUser(user);
-        showToast('注册成功，欢迎 ' + username);
-        return true;
-      } else {
-        const user = await metaGet('user_' + username);
-        if (!user || user.passwordHash !== hashHex) { showToast('用户名或密码错误'); return false; }
-        await metaSet('currentUser', user);
-        setIsLoggedIn(true);
-        setCurrentUser(user);
-        showToast('登录成功，欢迎 ' + username);
-        return true;
+  // 局域网同步 - 初始连接和拉取
+  useEffect(() => {
+    if (loading || !syncServerUrl) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const serverData = await pullFromServer(syncServerUrl);
+        if (cancelled) return;
+        setSyncConnected(true);
+        setSyncStatus('');
+        // 合并数据
+        const mp = mergeArrays(products, serverData.products || []);
+        const mm = mergeArrays(members, serverData.members || []);
+        const ms = mergeArrays(sales, serverData.sales || []);
+        const mr = mergeArrays(pointsRecords, serverData.pointsRecords || []);
+        if (mp.length !== products.length || mm.length !== members.length ||
+            ms.length !== sales.length || mr.length !== pointsRecords.length) {
+          isFromSyncRef.current = true;
+          setProducts(mp); setMembers(mm); setSales(ms); setPointsRecords(mr);
+          setTimeout(() => { isFromSyncRef.current = false; }, 500);
+        }
+      } catch (e) {
+        if (cancelled) return;
+        console.warn('同步服务器连接失败:', e.message);
+        setSyncConnected(false);
+        setSyncStatus('');
       }
-    } catch (e) {
-      showToast('登录失败: ' + e.message);
-      return false;
-    }
-  };
+    })();
+    return () => { cancelled = true; };
+  }, [syncServerUrl]);
 
-  const handleLogout = async () => {
-    await metaSet('currentUser', null);
-    setIsLoggedIn(false);
-    setCurrentUser(null);
-    showToast('已退出登录');
+  // 局域网同步 - 定时拉取（每5秒）
+  useEffect(() => {
+    if (loading || !syncServerUrl || !syncConnected) return;
+    syncTimer2Ref.current = setInterval(async () => {
+      try {
+        const serverData = await pullFromServer(syncUrlRef.current);
+        const mp = mergeArrays(products, serverData.products || []);
+        const mm = mergeArrays(members, serverData.members || []);
+        const ms = mergeArrays(sales, serverData.sales || []);
+        const mr = mergeArrays(pointsRecords, serverData.pointsRecords || []);
+        if (mp.length !== products.length || mm.length !== members.length ||
+            ms.length !== sales.length || mr.length !== pointsRecords.length) {
+          isFromSyncRef.current = true;
+          setProducts(mp); setMembers(mm); setSales(ms); setPointsRecords(mr);
+          setTimeout(() => { isFromSyncRef.current = false; }, 500);
+        }
+        setSyncConnected(true);
+        setSyncStatus('');
+      } catch (e) {
+        setSyncConnected(false);
+        setSyncStatus('');
+      }
+    }, 5000);
+    return () => { if (syncTimer2Ref.current) clearInterval(syncTimer2Ref.current); };
+  }, [loading, syncServerUrl, syncConnected, products, members, sales, pointsRecords]);
+
+  // 局域网同步 - 数据变更时推送
+  useEffect(() => {
+    if (!initialLoadDoneRef.current || !syncServerUrl || !syncConnected || isFromSyncRef.current) return;
+    if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    pushTimerRef.current = setTimeout(async () => {
+      try {
+        setSyncing(true);
+        setSyncStatus('pushing');
+        await pushToServer(syncUrlRef.current, { products, members, sales, pointsRecords });
+        setSyncStatus('');
+      } catch (e) {
+        console.warn('同步推送失败:', e.message);
+        setSyncConnected(false);
+        setSyncStatus('');
+      } finally {
+        setSyncing(false);
+      }
+    }, 800);
+    return () => { if (pushTimerRef.current) clearTimeout(pushTimerRef.current); };
+  }, [products, members, sales, pointsRecords, syncServerUrl, syncConnected]);
+
+  // 同步设置处理函数
+  const handleSaveSyncUrl = async (url) => {
+    const trimmed = url.trim().replace(/\/+$/, '');
+    setSyncServerUrl(trimmed);
+    syncUrlRef.current = trimmed;
+    await metaSet('syncServerUrl', trimmed);
+    if (trimmed) {
+      try {
+        await pullFromServer(trimmed);
+        setSyncConnected(true);
+        showToast('同步服务器已连接');
+      } catch (e) {
+        setSyncConnected(false);
+        showToast('无法连接同步服务器: ' + e.message);
+      }
+    } else {
+      setSyncConnected(false);
+      setSyncStatus('');
+      showToast('已断开同步');
+    }
+    setShowSyncSettings(false);
   };
 
   const toggleScheduledBackup = async () => {
     const newVal = !scheduledBackupEnabled;
     setScheduledBackupEnabled(newVal);
     await metaSet('scheduledBackup', newVal);
-    showToast(newVal ? '已开启每日22:00自动备份' : '已关闭定时备份');
-  };
-
-  // 加载备份设置 + 自动备份
-  useEffect(() => {
-    if (loading) return;
-    (async () => {
-      try {
-        const handle = await getBackupDirHandle();
-        if (handle) {
-          setBackupDirName(handle.name || '已设置');
-          const lastTime = await metaGet('lastBackupTime');
-          if (lastTime) setLastBackupTime(lastTime);
-          // 检查今天是否已备份
-          const now = new Date();
-          const last = lastTime ? new Date(lastTime) : null;
-          const todayMatch = last && last.getFullYear() === now.getFullYear() && last.getMonth() === now.getMonth() && last.getDate() === now.getDate();
-          if (!todayMatch) {
-            const ok = await verifyDirPermission(handle);
-            if (ok) {
-              try {
-                setBackingUp(true);
-                const filename = await writeBackupFile(handle, products, members, sales, pointsRecords);
-                setLastBackupTime(now.toISOString());
-                setBackingUp(false);
-                console.log('自动备份完成:', filename);
-              } catch (e) {
-                setBackingUp(false);
-                console.warn('自动备份失败:', e);
-              }
-            }
-          }
-        }
-      } catch (e) { /* 忽略 */ }
-    })();
-  }, [loading]);
-
-  // 选择备份目录
-  const handlePickBackupDir = async () => {
-    try {
-      const handle = await pickBackupDir();
-      setBackupDirName(handle.name || '已设置');
-      showToast('备份目录已设置: ' + (handle.name || ''));
-    } catch (e) {
-      if (e.name !== 'AbortError') showToast('设置失败: ' + e.message);
-    }
+    showToast(newVal ? '已开启每日22:00自动下载备份' : '已关闭定时备份');
   };
 
   // 立即备份
   const handleBackupNow = async () => {
     try {
-      const handle = await getBackupDirHandle();
-      if (!handle) {
-        showToast('请先选择备份目录');
-        return;
-      }
-      const ok = await verifyDirPermission(handle);
-      if (!ok) {
-        const granted = await requestDirPermission(handle);
-        if (!granted) { showToast('需要文件夹访问权限'); return; }
-      }
       setBackingUp(true);
-      const filename = await writeBackupFile(handle, products, members, sales, pointsRecords);
-      setLastBackupTime(new Date().toISOString());
+      const blob = await exportToJSON();
+      const now = new Date();
+      const ts = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0')
+        + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
+      const filename = '美妆门店备份_' + ts + '.xlsx';
+      downloadBlob(blob, filename);
+      await metaSet('lastBackupTime', now.toISOString());
+      setLastBackupTime(now.toISOString());
       setBackingUp(false);
-      showToast('备份完成: ' + filename);
+      showToast('备份已下载: ' + filename);
     } catch (e) {
       setBackingUp(false);
       showToast('备份失败: ' + e.message);
     }
   };
 
-  // 持久化：数据变化时自动保存到 IndexedDB
-  const saveToDB = useCallback((storeName, items) => {
-    setDbBusy(true);
-    dbPutAll(storeName, items).catch(e => console.error('保存失败:', storeName, e)).finally(() => setDbBusy(false));
-  }, []);
-
-  useEffect(() => { if (!loading) saveToDB('products', products); }, [products, loading, saveToDB]);
-  useEffect(() => { if (!loading) saveToDB('members', members); }, [members, loading, saveToDB]);
-  useEffect(() => { if (!loading) saveToDB('sales', sales); }, [sales, loading, saveToDB]);
-  useEffect(() => { if (!loading) saveToDB('pointsRecords', pointsRecords); }, [pointsRecords, loading, saveToDB]);
-
-  // SQLite 导出
+  // 导出全部数据为 Excel
   const handleExportDB = async () => {
     try {
-      setToast('正在生成数据库文件...');
-      const blob = await exportToSQLite(products, members, sales, pointsRecords);
-      downloadBlob(blob, `美妆门店_${todayStr()}.sqlite`);
+      setToast('正在生成数据文件...');
+      const blob = await exportToJSON();
+      downloadBlob(blob, `美妆门店备份_${todayStr()}.xlsx`);
       setToast(null);
-      showToast('数据库已导出');
+      showToast('数据已导出');
     } catch (e) {
       setToast(null);
       showToast('导出失败: ' + e.message);
     }
   };
 
-  // SQLite 导入
+  // 从 JSON 文件导入数据
   const fileRef = useRef(null);
   const handleImportDB = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     try {
-      setToast('正在导入数据库...');
-      const data = await importFromSQLite(file);
+      setToast('正在导入数据...');
+      const data = await importFromJSON(file);
       setProducts(data.products || []);
       setMembers(data.members || []);
       setSales(data.sales || []);
@@ -2336,10 +3041,8 @@ function App() {
         return updated;
       }
       showToast('商品已添加');
-      return [...ps, { ...data, createdAt: new Date().toISOString() }];
+      return [...ps, { ...data, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }];
     });
-    // 自动导出今日数据
-    setTimeout(() => autoExportTodayData(), 300);
   };
   const deleteProduct = (id) => {
     setProducts(ps => ps.filter(p => p.id !== id));
@@ -2361,10 +3064,8 @@ function App() {
         return updated;
       }
       showToast('会员已添加');
-      return [...ms, { ...data, createdAt: new Date().toISOString() }];
+      return [...ms, { ...data, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }];
     });
-    // 自动导出今日数据
-    setTimeout(() => autoExportTodayData(), 300);
   };
   const deleteMember = (id) => {
     setMembers(ms => ms.filter(m => m.id !== id));
@@ -2378,6 +3079,7 @@ function App() {
       id: uid(),
       date: todayStr(),
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     setSales(s => [...s, saleRecord]);
     // 扣库存
@@ -2402,6 +3104,7 @@ function App() {
         description: `购物消费 ¥${fmt(sale.total)}（${sale.items.map(i => i.name + '×' + i.qty).join('，')}）`,
         date: todayStr(),
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       }]);
     }
     showToast(`结账成功 ¥${fmt(sale.total)}`);
@@ -2443,7 +3146,8 @@ function App() {
 
   // 手动调整积分
   const handleAdjustPoints = (record) => {
-    setPointsRecords(rs => [...rs, record]);
+    const recordWithTime = { ...record, updatedAt: new Date().toISOString() };
+    setPointsRecords(rs => [...rs, recordWithTime]);
     setMembers(ms => ms.map(m => {
       if (m.id !== record.memberId) return m;
       const points = Math.max(0, (m.points || 0) + record.points);
@@ -2485,30 +3189,22 @@ function App() {
             )}
             <button onClick={handleExportDB}
               className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
-              title="导出 SQLite 数据库文件">
+              title="导出 Excel 数据文件">
               <DownloadIcon className="w-3.5 h-3.5" /> <span className="hidden lg:inline">导出</span>
             </button>
             <button onClick={() => fileRef.current && fileRef.current.click()}
               className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
-              title="从 SQLite 文件导入数据">
+              title="从 Excel 文件导入数据">
               <UploadIcon className="w-3.5 h-3.5" /> <span className="hidden lg:inline">导入</span>
             </button>
-            <input ref={fileRef} type="file" accept=".sqlite,.db,application/x-sqlite3" onChange={handleImportDB} className="hidden" />
+            <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleImportDB} className="hidden" />
             <div className="w-px h-5 bg-gray-200 mx-0.5 hidden lg:block" />
-            <button onClick={handlePickBackupDir}
-              className={"flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm border rounded-lg transition-colors whitespace-nowrap " +
-                (backupDirName ? "text-green-700 border-green-300 hover:bg-green-50" : "text-gray-600 border-gray-300 hover:bg-gray-50")}
-              title={backupDirName ? "备份目录: " + backupDirName : "选择自动备份目录"}>
-              <BoxIcon className="w-3.5 h-3.5" /> <span className="hidden lg:inline">{backupDirName ? '备份✓' : '备份'}</span>
+            <button onClick={handleBackupNow} disabled={backingUp}
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors whitespace-nowrap disabled:opacity-50"
+              title={lastBackupTime ? "上次备份: " + new Date(lastBackupTime).toLocaleString('zh-CN') : "立即下载备份文件"}>
+              {backingUp ? <span className="w-3.5 h-3.5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" /> : <DownloadIcon className="w-3.5 h-3.5" />}
+              <span className="hidden lg:inline">备份</span>
             </button>
-            {backupDirName && (
-              <button onClick={handleBackupNow} disabled={backingUp}
-                className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors whitespace-nowrap disabled:opacity-50"
-                title={lastBackupTime ? "上次备份: " + new Date(lastBackupTime).toLocaleString('zh-CN') : "立即备份到已设目录"}>
-                {backingUp ? <span className="w-3.5 h-3.5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" /> : <DownloadIcon className="w-3.5 h-3.5" />}
-                <span className="hidden lg:inline">备份</span>
-              </button>
-            )}
             <button onClick={toggleScheduledBackup}
               className={"flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm border rounded-lg transition-colors whitespace-nowrap " +
                 (scheduledBackupEnabled ? "text-teal-700 border-teal-300 hover:bg-teal-50" : "text-gray-600 border-gray-300 hover:bg-gray-50")}
@@ -2517,22 +3213,17 @@ function App() {
               <span className="hidden lg:inline">{scheduledBackupEnabled ? '定时✓' : '定时'}</span>
             </button>
             <div className="w-px h-5 bg-gray-200 mx-0.5 hidden lg:block" />
-            {isLoggedIn ? (
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-gray-500 hidden lg:inline">{currentUser?.username}</span>
-                <button onClick={handleLogout}
-                  className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
-                  title="退出登录">
-                  <LockIcon className="w-3.5 h-3.5" /> <span className="hidden lg:inline">退出</span>
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setShowLogin(true)}
-                className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-purple-600 border border-purple-300 rounded-lg hover:bg-purple-50 transition-colors whitespace-nowrap"
-                title="登录云端账户">
-                <LockIcon className="w-3.5 h-3.5" /> <span className="hidden lg:inline">登录</span>
-              </button>
-            )}
+            <button onClick={() => setShowSyncSettings(true)}
+              className={"flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm border rounded-lg transition-colors whitespace-nowrap " +
+                (syncConnected ? "text-green-700 border-green-300 hover:bg-green-50" : syncServerUrl ? "text-red-600 border-red-300 hover:bg-red-50" : "text-gray-600 border-gray-300 hover:bg-gray-50")}
+              title={syncConnected ? "局域网同步已连接" : syncServerUrl ? "同步服务器未连接，点击设置" : "点击设置局域网同步"}>
+              {syncing ? (
+                <span className="w-3.5 h-3.5 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
+              ) : (
+                <SyncIcon className="w-3.5 h-3.5" />
+              )}
+              <span className="hidden lg:inline">{syncConnected ? '已同步' : syncServerUrl ? '未连接' : '同步'}</span>
+            </button>
           </div>
         </div>
       </header>
@@ -2554,9 +3245,14 @@ function App() {
         )}
       </main>
 
-      {/* 登录弹窗 */}
-      {showLogin && (
-        <LoginModal onLogin={handleLogin} onClose={() => setShowLogin(false)} />
+      {/* 同步设置弹窗 */}
+      {showSyncSettings && (
+        <SyncSettingsModal
+          currentUrl={syncServerUrl}
+          connected={syncConnected}
+          onSave={handleSaveSyncUrl}
+          onClose={() => setShowSyncSettings(false)}
+        />
       )}
 
       {/* Toast 提示 */}
