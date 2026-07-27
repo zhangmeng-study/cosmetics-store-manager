@@ -576,7 +576,9 @@ function DashboardPage({ products, members, onCheckout }) {
   }, [cart, confirmedItemPrices, confirmedItemDiscounts, discount]);
   // Use confirmedTotal if set, otherwise fall back to calculatedTotal
   const finalTotal = confirmedTotal !== null ? confirmedTotal : (editingTotal && customTotal !== '' ? (parseFloat(customTotal) || 0) : calculatedTotal);
-  const change = receivedAmount ? Math.max(0, (parseFloat(receivedAmount) || 0) - finalTotal) : 0;
+  // 计算实际收款金额：未手动编辑时使用 finalTotal，避免异步状态更新导致找零计算错误
+  const effectiveReceivedAmount = receivedAmountManuallyEdited ? (parseFloat(receivedAmount) || 0) : finalTotal;
+  const change = effectiveReceivedAmount > 0 ? Math.max(0, effectiveReceivedAmount - finalTotal) : 0;
 
   // 同步 finalTotalRef 供结账时使用
   useEffect(() => { finalTotalRef.current = finalTotal; }, [finalTotal]);
@@ -1323,16 +1325,16 @@ function DashboardPage({ products, members, onCheckout }) {
                 className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="输入收款金额 (F4)" />
             </div>
-            {paymentMethod === 'cash' && receivedAmount && parseFloat(receivedAmount) >= finalTotal && (
+            {paymentMethod === 'cash' && effectiveReceivedAmount >= finalTotal && change > 0 && (
               <div className="flex justify-between items-center text-sm pt-1 border-t border-dashed border-gray-200">
                 <span className="text-gray-500">找零</span>
                 <span className="font-semibold text-green-600 text-base">¥{fmt(change)}</span>
               </div>
             )}
-            {paymentMethod === 'cash' && receivedAmount && parseFloat(receivedAmount) < finalTotal && (
+            {paymentMethod === 'cash' && effectiveReceivedAmount < finalTotal && (
               <div className="flex justify-between items-center text-sm pt-1 border-t border-dashed border-gray-200">
                 <span className="text-gray-500">还差</span>
-                <span className="font-semibold text-red-500 text-base">¥{fmt(finalTotal - (parseFloat(receivedAmount) || 0))}</span>
+                <span className="font-semibold text-red-500 text-base">¥{fmt(finalTotal - effectiveReceivedAmount)}</span>
               </div>
             )}
             {/* 支付方式 */}

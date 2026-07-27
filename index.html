@@ -1108,7 +1108,9 @@ function DashboardPage({
   }, [cart, confirmedItemPrices, confirmedItemDiscounts, discount]);
   // Use confirmedTotal if set, otherwise fall back to calculatedTotal
   const finalTotal = confirmedTotal !== null ? confirmedTotal : editingTotal && customTotal !== '' ? parseFloat(customTotal) || 0 : calculatedTotal;
-  const change = receivedAmount ? Math.max(0, (parseFloat(receivedAmount) || 0) - finalTotal) : 0;
+  // 计算实际收款金额：未手动编辑时使用 finalTotal，避免异步状态更新导致找零计算错误
+  const effectiveReceivedAmount = receivedAmountManuallyEdited ? parseFloat(receivedAmount) || 0 : finalTotal;
+  const change = effectiveReceivedAmount > 0 ? Math.max(0, effectiveReceivedAmount - finalTotal) : 0;
 
   // 同步 finalTotalRef 供结账时使用
   useEffect(() => {
@@ -2001,19 +2003,19 @@ function DashboardPage({
     },
     className: "flex-1 px-2 py-1.5 border border-gray-300 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500",
     placeholder: "\u8F93\u5165\u6536\u6B3E\u91D1\u989D (F4)"
-  })), paymentMethod === 'cash' && receivedAmount && parseFloat(receivedAmount) >= finalTotal && /*#__PURE__*/React.createElement("div", {
+  })), paymentMethod === 'cash' && effectiveReceivedAmount >= finalTotal && change > 0 && /*#__PURE__*/React.createElement("div", {
     className: "flex justify-between items-center text-sm pt-1 border-t border-dashed border-gray-200"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-gray-500"
   }, "\u627E\u96F6"), /*#__PURE__*/React.createElement("span", {
     className: "font-semibold text-green-600 text-base"
-  }, "\xA5", fmt(change))), paymentMethod === 'cash' && receivedAmount && parseFloat(receivedAmount) < finalTotal && /*#__PURE__*/React.createElement("div", {
+  }, "\xA5", fmt(change))), paymentMethod === 'cash' && effectiveReceivedAmount < finalTotal && /*#__PURE__*/React.createElement("div", {
     className: "flex justify-between items-center text-sm pt-1 border-t border-dashed border-gray-200"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-gray-500"
   }, "\u8FD8\u5DEE"), /*#__PURE__*/React.createElement("span", {
     className: "font-semibold text-red-500 text-base"
-  }, "\xA5", fmt(finalTotal - (parseFloat(receivedAmount) || 0)))), /*#__PURE__*/React.createElement("div", {
+  }, "\xA5", fmt(finalTotal - effectiveReceivedAmount))), /*#__PURE__*/React.createElement("div", {
     className: "pt-2 border-t border-gray-100"
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center justify-between mb-1.5"
