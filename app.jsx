@@ -561,7 +561,8 @@ function DashboardPage({ products, members, onCheckout }) {
     }, 0);
   }, [cart, confirmedItemPrices]);
   const member = members.find(m => m.id === memberId);
-  const level = member ? getLevel(member.points) : MEMBER_LEVELS[0];
+  // 使用会员保存的等级，如果没有则根据积分自动计算
+  const level = member ? (MEMBER_LEVELS.find(l => l.id === member.level) || getLevel(member.points)) : MEMBER_LEVELS[0];
   // Use confirmedDiscount if set, otherwise fall back to level.discount
   const discount = confirmedDiscount !== null ? confirmedDiscount : (editingDiscount && customDiscount !== '' ? (parseFloat(customDiscount) || 1) : level.discount);
   // 会员/全局折扣仅对没有单品折扣的商品生效，有单品折扣的商品直接用折后价
@@ -1115,7 +1116,7 @@ function DashboardPage({ products, members, onCheckout }) {
                     </div>
                   ) : (
                     filteredMembers.map((m, idx) => {
-                      const lv = getLevel(m.points);
+                      const lv = MEMBER_LEVELS.find(l => l.id === m.level) || getLevel(m.points);
                       return (
                         <button key={m.id} onClick={() => { setMemberId(m.id); setConfirmedDiscount(null); setConfirmedTotal(null); setShowMemberSearchModal(false); setMemberSearch(''); setSelectedMemberIndex(0); }}
                           onMouseEnter={() => setSelectedMemberIndex(idx)}
@@ -1990,7 +1991,7 @@ function MembersPage({ members, onSaveMember, onDeleteMember, pointsRecords, onA
       ) : viewMode === 'card' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           {filtered.map(m => {
-            const level = getLevel(m.points);
+            const level = MEMBER_LEVELS.find(l => l.id === m.level) || getLevel(m.points);
             return (
               <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-3">
@@ -2053,7 +2054,7 @@ function MembersPage({ members, onSaveMember, onDeleteMember, pointsRecords, onA
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filtered.map(m => {
-                  const level = getLevel(m.points);
+                  const level = MEMBER_LEVELS.find(l => l.id === m.level) || getLevel(m.points);
                   return (
                     <tr key={m.id} className="hover:bg-gray-50 transition-colors">
                       <td className="py-3 px-4">
