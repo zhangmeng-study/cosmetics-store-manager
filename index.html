@@ -268,16 +268,6 @@ const CardIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PUR
   x2: "23",
   y2: "10"
 }));
-const LockIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("rect", {
-  x: "3",
-  y: "11",
-  width: "18",
-  height: "11",
-  rx: "2",
-  ry: "2"
-}), /*#__PURE__*/React.createElement("path", {
-  d: "M7 11V7a5 5 0 0 1 10 0v4"
-}));
 const KeyboardIcon = props => /*#__PURE__*/React.createElement(Icon, props, /*#__PURE__*/React.createElement("rect", {
   x: "2",
   y: "4",
@@ -3417,108 +3407,6 @@ async function importFromJSON(file) {
   };
 }
 
-// ===== 登录弹窗 =====
-function LoginModal({
-  onLogin,
-  onClose
-}) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isRegister, setIsRegister] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const handleSubmit = async () => {
-    if (!username.trim()) {
-      alert('请输入用户名');
-      return;
-    }
-    if (!password) {
-      alert('请输入密码');
-      return;
-    }
-    if (isRegister && password !== confirmPassword) {
-      alert('两次密码不一致');
-      return;
-    }
-    if (password.length < 4) {
-      alert('密码至少4位');
-      return;
-    }
-    setLoading(true);
-    const success = await onLogin(username.trim(), password, isRegister);
-    setLoading(false);
-    if (success) onClose();
-  };
-  return /*#__PURE__*/React.createElement("div", {
-    className: "fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "absolute inset-0 overflow-hidden"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "absolute top-1/4 left-1/4 w-64 h-64 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "absolute top-3/4 right-1/4 w-64 h-64 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse",
-    style: {
-      animationDelay: '1s'
-    }
-  })), /*#__PURE__*/React.createElement("div", {
-    className: "relative bg-white bg-opacity-95 backdrop-blur-sm rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "bg-gradient-to-r from-pink-500 to-purple-600 px-6 py-6 text-center"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "w-16 h-16 rounded-full bg-white bg-opacity-20 flex items-center justify-center mx-auto mb-3"
-  }, /*#__PURE__*/React.createElement(LockIcon, {
-    className: "w-8 h-8 text-white"
-  })), /*#__PURE__*/React.createElement("h2", {
-    className: "text-xl font-bold text-white"
-  }, "\u7F8E\u5986\u95E8\u5E97\u7BA1\u7406\u7CFB\u7EDF"), /*#__PURE__*/React.createElement("p", {
-    className: "text-sm text-white text-opacity-80 mt-1"
-  }, isRegister ? '创建新账户' : '登录系统')), /*#__PURE__*/React.createElement("div", {
-    className: "px-6 py-5 space-y-4"
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-    className: "block text-sm font-medium text-gray-600 mb-1"
-  }, "\u7528\u6237\u540D"), /*#__PURE__*/React.createElement("input", {
-    value: username,
-    onChange: e => setUsername(e.target.value),
-    className: "w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500",
-    placeholder: "\u8BF7\u8F93\u5165\u7528\u6237\u540D",
-    autoFocus: true,
-    onKeyDown: e => e.key === 'Enter' && handleSubmit()
-  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-    className: "block text-sm font-medium text-gray-600 mb-1"
-  }, "\u5BC6\u7801"), /*#__PURE__*/React.createElement("input", {
-    type: "password",
-    value: password,
-    onChange: e => setPassword(e.target.value),
-    className: "w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500",
-    placeholder: "\u8BF7\u8F93\u5165\u5BC6\u7801",
-    onKeyDown: e => e.key === 'Enter' && handleSubmit()
-  })), isRegister && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-    className: "block text-sm font-medium text-gray-600 mb-1"
-  }, "\u786E\u8BA4\u5BC6\u7801"), /*#__PURE__*/React.createElement("input", {
-    type: "password",
-    value: confirmPassword,
-    onChange: e => setConfirmPassword(e.target.value),
-    className: "w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500",
-    placeholder: "\u518D\u6B21\u8F93\u5165\u5BC6\u7801",
-    onKeyDown: e => e.key === 'Enter' && handleSubmit()
-  })), /*#__PURE__*/React.createElement("button", {
-    onClick: handleSubmit,
-    disabled: loading,
-    className: "w-full py-2.5 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg hover:from-pink-600 hover:to-purple-700 transition-all font-medium disabled:opacity-50"
-  }, loading ? '处理中...' : isRegister ? '注册' : '登录'), /*#__PURE__*/React.createElement("div", {
-    className: "text-center"
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setIsRegister(!isRegister);
-      setConfirmPassword('');
-    },
-    className: "text-sm text-purple-600 hover:text-purple-800 transition-colors"
-  }, isRegister ? '已有账户？点击登录' : '没有账户？点击注册')), /*#__PURE__*/React.createElement("button", {
-    onClick: onClose,
-    className: "w-full py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-  }, "\u6682\u4E0D\u767B\u5F55\uFF0C\u7EE7\u7EED\u4F7F\u7528\u672C\u5730\u6570\u636E"))));
-}
-
 // ===== 主组件 =====
 function App() {
   const [tab, setTab] = useState('pos');
@@ -3532,9 +3420,6 @@ function App() {
   const [dbBusy, setDbBusy] = useState(false);
   const [lastBackupTime, setLastBackupTime] = useState('');
   const [backingUp, setBackingUp] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [showLogin, setShowLogin] = useState(false);
   const [scheduledBackupEnabled, setScheduledBackupEnabled] = useState(false);
 
   // 初始化：从 IndexedDB 加载数据
@@ -3585,19 +3470,15 @@ function App() {
     syncToIndexedDB(products, members, sales, pointsRecords);
   }, [products, members, sales, pointsRecords]);
 
-  // 登录状态检查 + 定时备份
+  // 加载备份设置
   useEffect(() => {
     if (loading) return;
-    // 检查登录状态
     (async () => {
       try {
-        const user = await metaGet('currentUser');
-        if (user) {
-          setIsLoggedIn(true);
-          setCurrentUser(user);
-        }
         const backupSetting = await metaGet('scheduledBackup');
         if (backupSetting) setScheduledBackupEnabled(true);
+        const lastTime = await metaGet('lastBackupTime');
+        if (lastTime) setLastBackupTime(lastTime);
       } catch (e) {/* 忽略 */}
     })();
   }, [loading]);
@@ -3625,71 +3506,12 @@ function App() {
     const timer = setInterval(checkBackup, 60000);
     return () => clearInterval(timer);
   }, [loading, scheduledBackupEnabled]);
-
-  // 登录/注册
-  const handleLogin = async (username, password, isRegister) => {
-    try {
-      const msgBuffer = new TextEncoder().encode(password);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-      if (isRegister) {
-        const existing = await metaGet('user_' + username);
-        if (existing) {
-          showToast('用户名已存在');
-          return false;
-        }
-        const user = {
-          username,
-          passwordHash: hashHex,
-          createdAt: new Date().toISOString()
-        };
-        await metaSet('user_' + username, user);
-        await metaSet('currentUser', user);
-        setIsLoggedIn(true);
-        setCurrentUser(user);
-        showToast('注册成功，欢迎 ' + username);
-        return true;
-      } else {
-        const user = await metaGet('user_' + username);
-        if (!user || user.passwordHash !== hashHex) {
-          showToast('用户名或密码错误');
-          return false;
-        }
-        await metaSet('currentUser', user);
-        setIsLoggedIn(true);
-        setCurrentUser(user);
-        showToast('登录成功，欢迎 ' + username);
-        return true;
-      }
-    } catch (e) {
-      showToast('登录失败: ' + e.message);
-      return false;
-    }
-  };
-  const handleLogout = async () => {
-    await metaSet('currentUser', null);
-    setIsLoggedIn(false);
-    setCurrentUser(null);
-    showToast('已退出登录');
-  };
   const toggleScheduledBackup = async () => {
     const newVal = !scheduledBackupEnabled;
     setScheduledBackupEnabled(newVal);
     await metaSet('scheduledBackup', newVal);
     showToast(newVal ? '已开启每日22:00自动下载备份' : '已关闭定时备份');
   };
-
-  // 加载备份设置
-  useEffect(() => {
-    if (loading) return;
-    (async () => {
-      try {
-        const lastTime = await metaGet('lastBackupTime');
-        if (lastTime) setLastBackupTime(lastTime);
-      } catch (e) {/* 忽略 */}
-    })();
-  }, [loading]);
 
   // 立即备份
   const handleBackupNow = async () => {
@@ -4076,29 +3898,7 @@ function App() {
     className: "w-2 h-2 rounded-full " + (scheduledBackupEnabled ? "bg-teal-400" : "bg-gray-300")
   }), /*#__PURE__*/React.createElement("span", {
     className: "hidden lg:inline"
-  }, scheduledBackupEnabled ? '定时✓' : '定时')), /*#__PURE__*/React.createElement("div", {
-    className: "w-px h-5 bg-gray-200 mx-0.5 hidden lg:block"
-  }), isLoggedIn ? /*#__PURE__*/React.createElement("div", {
-    className: "flex items-center gap-1.5"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "text-xs text-gray-500 hidden lg:inline"
-  }, currentUser?.username), /*#__PURE__*/React.createElement("button", {
-    onClick: handleLogout,
-    className: "flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap",
-    title: "\u9000\u51FA\u767B\u5F55"
-  }, /*#__PURE__*/React.createElement(LockIcon, {
-    className: "w-3.5 h-3.5"
-  }), " ", /*#__PURE__*/React.createElement("span", {
-    className: "hidden lg:inline"
-  }, "\u9000\u51FA"))) : /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowLogin(true),
-    className: "flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-purple-600 border border-purple-300 rounded-lg hover:bg-purple-50 transition-colors whitespace-nowrap",
-    title: "\u767B\u5F55\u7CFB\u7EDF"
-  }, /*#__PURE__*/React.createElement(LockIcon, {
-    className: "w-3.5 h-3.5"
-  }), " ", /*#__PURE__*/React.createElement("span", {
-    className: "hidden lg:inline"
-  }, "\u767B\u5F55"))))), /*#__PURE__*/React.createElement("main", {
+  }, scheduledBackupEnabled ? '定时✓' : '定时'))))), /*#__PURE__*/React.createElement("main", {
     className: "max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-6"
   }, loading ? /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col items-center justify-center py-20 text-gray-400"
@@ -4125,10 +3925,7 @@ function App() {
     sales: sales,
     products: products,
     onDeleteSale: deleteSale
-  }))), showLogin && /*#__PURE__*/React.createElement(LoginModal, {
-    onLogin: handleLogin,
-    onClose: () => setShowLogin(false)
-  }), toast && /*#__PURE__*/React.createElement("div", {
+  }))), toast && /*#__PURE__*/React.createElement("div", {
     className: "fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg z-50 text-sm"
   }, toast));
 }
