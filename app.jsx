@@ -3085,7 +3085,7 @@ function App() {
     // 扣库存
     setProducts(ps => ps.map(p => {
       const item = sale.items.find(i => i.id === p.id);
-      if (item) return { ...p, stock: Math.max(0, (p.stock || 0) - item.qty) };
+      if (item) return { ...p, stock: Math.max(0, (p.stock || 0) - item.qty), updatedAt: new Date().toISOString() };
       return p;
     }));
     // 加积分 + 积分记录
@@ -3093,7 +3093,7 @@ function App() {
       setMembers(ms => ms.map(m => {
         if (m.id !== sale.memberId) return m;
         const points = (m.points || 0) + sale.total;
-        return { ...m, points };
+        return { ...m, points, updatedAt: new Date().toISOString() };
       }));
       setPointsRecords(rs => [...rs, {
         id: uid(),
@@ -3118,7 +3118,7 @@ function App() {
       // 恢复商品库存
       setProducts(ps => ps.map(p => {
         const item = sale.items.find(i => i.id === p.id);
-        if (item) return { ...p, stock: (p.stock || 0) + item.qty };
+        if (item) return { ...p, stock: (p.stock || 0) + item.qty, updatedAt: new Date().toISOString() };
         return p;
       }));
       // 扣除会员积分 + 积分记录
@@ -3126,7 +3126,7 @@ function App() {
         setMembers(ms => ms.map(m => {
           if (m.id !== sale.memberId) return m;
           const points = Math.max(0, (m.points || 0) - sale.total);
-          return { ...m, points };
+          return { ...m, points, updatedAt: new Date().toISOString() };
         }));
         setPointsRecords(rs => [...rs, {
           id: uid(),
@@ -3137,6 +3137,7 @@ function App() {
           description: `退货退款 ¥${fmt(sale.total)}（${sale.items.map(i => i.name + '×' + i.qty).join('，')}）`,
           date: todayStr(),
           createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         }]);
       }
       showToast(`退货成功，已恢复库存，退款 ¥${fmt(sale.total)}`);
@@ -3151,7 +3152,7 @@ function App() {
     setMembers(ms => ms.map(m => {
       if (m.id !== record.memberId) return m;
       const points = Math.max(0, (m.points || 0) + record.points);
-      return { ...m, points };
+      return { ...m, points, updatedAt: new Date().toISOString() };
     }));
     showToast(`积分已${record.points > 0 ? '增加' : '扣减'} ${Math.abs(record.points)}`);
   };
