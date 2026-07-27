@@ -3080,257 +3080,142 @@ function StatsPage({
   }), " \u9000\u8D27"))))))))));
 }
 
-// ===== SQLite 本地数据库（sql.js）=====
-// 主存储使用 SQLite，IndexedDB 仅用于持久化 SQLite 二进制文件
-const SQL_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js';
-const SQL_JS_WASM = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/';
-const PERSIST_DB_NAME = 'cosmetics_store_sqlite';
-const PERSIST_STORE = 'sqlite_db';
-
-// 加载 sql.js 脚本
-function loadSqlJsScript() {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector('script[src="' + SQL_JS_CDN + '"]')) return resolve();
-    const s = document.createElement('script');
-    s.src = SQL_JS_CDN;
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('sql.js 加载失败'));
-    document.head.appendChild(s);
+// ===== 云端 API（Cloudflare Workers + D1）=====
+const API_BASE = window.__API_BASE__ || 'https://cosmetics-store-api.workers.dev';
+async function apiFetch(path, options) {
+  const res = await fetch(API_BASE + path, {
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    ...options
   });
+  if (!res.ok) throw new Error('API 错误: ' + res.status);
+  return res.json();
 }
-
-// 初始化 SQL 引擎
-async function initSqlJsEngine() {
-  await loadSqlJsScript();
-  return await window.initSqlJs({
-    locateFile: f => SQL_JS_WASM + f
+const dbGetAll = table => {
+  const map = {
+    products: '/products',
+    members: '/members',
+    sales: '/sales',
+    pointsRecords: '/points-records'
+  };
+  return apiFetch('/api' + (map[table] || '/' + table));
+};
+const dbPutAll = async (table, items) => {
+  await apiFetch('/api/bulk', {
+    method: 'POST',
+    body: JSON.stringify({
+      [table]: items
+    })
   });
-}
-
-// IndexedDB 持久化层（仅存储 SQLite 二进制）
-function openPersistDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(PERSIST_DB_NAME, 1);
-    req.onupgradeneeded = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(PERSIST_STORE)) {
-        db.createObjectStore(PERSIST_STORE);
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-async function persistSave(dbBytes) {
-  const db = await openPersistDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(PERSIST_STORE, 'readwrite');
-    tx.objectStore(PERSIST_STORE).put(dbBytes, 'main');
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-async function persistLoad() {
-  const db = await openPersistDB();
-  return new Promise(resolve => {
-    const tx = db.transaction(PERSIST_STORE, 'readonly');
-    const req = tx.objectStore(PERSIST_STORE).get('main');
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => resolve(null);
-  });
-}
-
-// 创建数据库表结构
-function createTables(db) {
-  db.run(`CREATE TABLE IF NOT EXISTS products (
-    id TEXT PRIMARY KEY, name TEXT, barcode TEXT, brand TEXT,
-    category TEXT, price REAL, stock INTEGER, cost REAL, sku TEXT, createdAt TEXT
-  )`);
-  db.run(`CREATE TABLE IF NOT EXISTS members (
-    id TEXT PRIMARY KEY, name TEXT, phone TEXT, birthday TEXT,
-    address TEXT, points INTEGER, createdAt TEXT
-  )`);
-  db.run(`CREATE TABLE IF NOT EXISTS sales (
-    id TEXT PRIMARY KEY, date TEXT, createdAt TEXT, itemsJson TEXT,
-    subtotal REAL, total REAL, memberId TEXT, memberName TEXT, levelName TEXT
-  )`);
-  db.run(`CREATE TABLE IF NOT EXISTS points_records (
-    id TEXT PRIMARY KEY, memberId TEXT, memberName TEXT,
-    points INTEGER, type TEXT, description TEXT, date TEXT, createdAt TEXT
-  )`);
-}
-
-// 全局 SQLite 数据库实例
-let sqlDb = null;
-let sqlEngine = null;
-let saveTimer = null;
-
-// 初始化 SQLite 数据库
-async function initSQLiteDB() {
-  sqlEngine = await initSqlJsEngine();
-  const savedBytes = await persistLoad();
-  if (savedBytes) {
-    sqlDb = new sqlEngine.Database(new Uint8Array(savedBytes));
-  } else {
-    sqlDb = new sqlEngine.Database();
-    createTables(sqlDb);
-  }
-  // 检查 SQLite 是否为空，如果为空则尝试从旧 IndexedDB 迁移
-  const countResult = sqlDb.exec('SELECT COUNT(*) as cnt FROM products');
-  const productCount = countResult[0] && countResult[0].values[0][0] || 0;
-  if (productCount === 0) {
-    await migrateFromOldIndexedDB();
-  }
-  console.log('SQLite 数据库初始化完成');
-}
-
-// 从旧版 IndexedDB 迁移数据到 SQLite
-async function migrateFromOldIndexedDB() {
-  const OLD_DB_NAME = 'cosmetics_store';
-  const OLD_DB_VERSION = 1;
-  const STORES = ['products', 'members', 'sales', 'pointsRecords'];
+};
+const metaGet = async key => {
   try {
-    // 检查旧数据库是否存在
-    const oldDbExists = await new Promise(resolve => {
-      const req = indexedDB.open(OLD_DB_NAME);
-      req.onsuccess = () => {
-        const db = req.result;
-        const hasStores = STORES.every(s => db.objectStoreNames.contains(s));
-        db.close();
-        resolve(hasStores);
-      };
-      req.onerror = () => resolve(false);
-      req.onupgradeneeded = () => {
-        // 如果触发 upgradeneeded，说明数据库不存在或版本不对
-        resolve(false);
-      };
-    });
-    if (!oldDbExists) {
-      console.log('旧版 IndexedDB 不存在，跳过迁移');
-      return;
-    }
-    console.log('检测到旧版 IndexedDB，开始迁移数据...');
+    return await apiFetch('/api/meta/' + encodeURIComponent(key));
+  } catch (e) {
+    return null;
+  }
+};
+const metaSet = async (key, value) => {
+  await fetch(API_BASE + '/api/meta/' + encodeURIComponent(key), {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: typeof value === 'string' ? value : JSON.stringify(value)
+  });
+};
 
-    // 打开旧数据库并读取数据
+// 初始化：从 API 加载全部数据
+async function initFromAPI() {
+  try {
+    const [p, m, s, r] = await Promise.all([dbGetAll('products'), dbGetAll('members'), dbGetAll('sales'), dbGetAll('pointsRecords')]);
+    // 如果 API 返回空且本地有旧数据，尝试迁移
+    if (p.length === 0 && m.length === 0) {
+      const migrated = await tryMigrateOldIndexedDB();
+      if (migrated) return await initFromAPI();
+    }
+    return {
+      products: p,
+      members: m,
+      sales: s,
+      pointsRecords: r
+    };
+  } catch (e) {
+    console.warn('API 加载失败，尝试从旧本地数据迁移...', e.message);
+    const migrated = await tryMigrateOldIndexedDB();
+    if (migrated) return await initFromAPI();
+    return {
+      products: [],
+      members: [],
+      sales: [],
+      pointsRecords: []
+    };
+  }
+}
+
+// 从旧版 IndexedDB 迁移到云端 API
+async function tryMigrateOldIndexedDB() {
+  try {
     const oldDb = await new Promise((resolve, reject) => {
-      const req = indexedDB.open(OLD_DB_NAME, OLD_DB_VERSION);
+      const req = indexedDB.open('cosmetics_store', 1);
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
+      req.onupgradeneeded = () => resolve(null);
     });
-    const migratedData = {};
-    for (const storeName of STORES) {
-      const items = await new Promise((resolve, reject) => {
-        const tx = oldDb.transaction(storeName, 'readonly');
-        const store = tx.objectStore(storeName);
-        const req = store.getAll();
+    if (!oldDb) return false;
+    const stores = ['products', 'members', 'sales', 'pointsRecords'];
+    const hasStores = stores.every(s => oldDb.objectStoreNames.contains(s));
+    if (!hasStores) {
+      oldDb.close();
+      return false;
+    }
+    console.log('检测到旧版本地数据，开始迁移到云端...');
+    const data = {};
+    for (const s of stores) {
+      data[s] = await new Promise((resolve, reject) => {
+        const tx = oldDb.transaction(s, 'readonly');
+        const req = tx.objectStore(s).getAll();
         req.onsuccess = () => resolve(req.result || []);
         req.onerror = () => reject(req.error);
       });
-      migratedData[storeName] = items;
-      console.log(`读取旧数据: ${storeName} ${items.length} 条`);
     }
     oldDb.close();
-
-    // 写入 SQLite
-    for (const [storeName, items] of Object.entries(migratedData)) {
-      if (items.length > 0) {
-        await dbPutAll(storeName, items);
-        console.log(`迁移完成: ${storeName} ${items.length} 条`);
-      }
-    }
-
-    // 立即持久化
-    if (sqlDb) {
-      const bytes = sqlDb.export();
-      await persistSave(bytes);
-    }
-    console.log('数据迁移完成！旧版 IndexedDB 数据已导入 SQLite');
+    await apiFetch('/api/bulk', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+    console.log('旧数据迁移到云端完成！');
+    return true;
   } catch (e) {
-    console.warn('数据迁移失败（不影响正常使用）:', e.message);
+    console.warn('迁移失败:', e.message);
+    return false;
   }
 }
 
-// 保存 SQLite 到 IndexedDB（防抖，避免频繁写入）
-function schedulePersist() {
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    if (sqlDb) {
-      const bytes = sqlDb.export();
-      persistSave(bytes).catch(e => console.error('持久化失败:', e));
+// 数据变更同步到云端（防抖）
+let syncTimer = null;
+function syncToAPI(products, members, sales, pointsRecords) {
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(async () => {
+    try {
+      await apiFetch('/api/bulk', {
+        method: 'POST',
+        body: JSON.stringify({
+          products,
+          members,
+          sales,
+          pointsRecords
+        })
+      });
+      console.log('数据已同步到云端');
+    } catch (e) {
+      console.error('同步到云端失败:', e);
     }
   }, 500);
 }
 
-// 通用查询
-function sqlExec(sql, params) {
-  if (params) {
-    sqlDb.run(sql, params);
-  } else {
-    sqlDb.run(sql);
-  }
-  schedulePersist();
-}
-function sqlQuery(sql, params) {
-  if (params) {
-    return sqlDb.exec(sql, params);
-  }
-  return sqlDb.exec(sql);
-}
-
-// 表名映射：JS camelCase → SQL snake_case
-const TABLE_MAP = {
-  products: 'products',
-  members: 'members',
-  sales: 'sales',
-  pointsRecords: 'points_records'
-};
-
-// CRUD 封装
-const dbGetAll = table => {
-  const sqlTable = TABLE_MAP[table] || table;
-  const result = sqlQuery(`SELECT * FROM ${sqlTable}`);
-  if (!result[0]) return [];
-  return result[0].values.map(row => {
-    const obj = {};
-    result[0].columns.forEach((col, i) => {
-      obj[col] = row[i];
-    });
-    return obj;
-  });
-};
-const dbPutAll = async (table, items) => {
-  const sqlTable = TABLE_MAP[table] || table;
-  sqlExec(`DELETE FROM ${sqlTable}`);
-  if (items.length === 0) {
-    schedulePersist();
-    return;
-  }
-  const columns = Object.keys(items[0]);
-  const placeholders = columns.map(() => '?').join(',');
-  const stmt = sqlDb.prepare(`INSERT INTO ${sqlTable} (${columns.join(',')}) VALUES (${placeholders})`);
-  items.forEach(item => {
-    stmt.run(columns.map(c => {
-      const v = item[c];
-      if (v === undefined || v === null) return null;
-      if (typeof v === 'object') return JSON.stringify(v);
-      return v;
-    }));
-  });
-  stmt.free();
-  schedulePersist();
-};
-
-// 请求永久存储
-async function requestPersistentStorage() {
-  if (navigator.storage && navigator.storage.persist) {
-    try {
-      const isPersisted = await navigator.storage.persisted();
-      if (!isPersisted) await navigator.storage.persist();
-    } catch (e) {/* 忽略 */}
-  }
-}
-
-// ===== SQLite 导出/导入（文件备份）=====
+// 通用下载
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -3341,133 +3226,30 @@ function downloadBlob(blob, filename) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-async function exportToSQLite() {
-  if (!sqlDb) throw new Error('数据库未初始化');
-  const data = sqlDb.export();
+
+// 导出全部数据为 JSON 文件
+async function exportToJSON() {
+  const [p, m, s, r] = await Promise.all([dbGetAll('products'), dbGetAll('members'), dbGetAll('sales'), dbGetAll('pointsRecords')]);
+  const data = JSON.stringify({
+    products: p,
+    members: m,
+    sales: s,
+    pointsRecords: r
+  }, null, 2);
   return new Blob([data], {
-    type: 'application/x-sqlite3'
+    type: 'application/json'
   });
-}
-async function importFromSQLite(file) {
-  const SQL = await initSqlJsEngine();
-  const buf = await file.arrayBuffer();
-  const db = new SQL.Database(new Uint8Array(buf));
-  const products = [],
-    members = [],
-    sales = [],
-    pointsRecords = [];
-  db.exec('SELECT * FROM products')[0]?.values.forEach(row => {
-    const o = {};
-    db.exec('SELECT * FROM products LIMIT 0')[0].columns.forEach((c, i) => o[c] = row[i]);
-    products.push(o);
-  });
-  db.exec('SELECT * FROM members')[0]?.values.forEach(row => {
-    const o = {};
-    db.exec('SELECT * FROM members LIMIT 0')[0].columns.forEach((c, i) => o[c] = row[i]);
-    members.push(o);
-  });
-  db.exec('SELECT * FROM sales')[0]?.values.forEach(row => {
-    const o = {};
-    db.exec('SELECT * FROM sales LIMIT 0')[0].columns.forEach((c, i) => o[c] = row[i]);
-    if (o.itemsJson) o.items = JSON.parse(o.itemsJson);
-    sales.push(o);
-  });
-  db.exec('SELECT * FROM points_records')[0]?.values.forEach(row => {
-    const o = {};
-    db.exec('SELECT * FROM points_records LIMIT 0')[0].columns.forEach((c, i) => o[c] = row[i]);
-    pointsRecords.push(o);
-  });
-  db.close();
-  return {
-    products,
-    members,
-    sales,
-    pointsRecords
-  };
 }
 
-// ===== 自动备份（File System Access API）=====
-const META_DB = 'cosmetics_meta';
-const META_STORE = 'kv';
-function openMetaDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(META_DB, 1);
-    req.onupgradeneeded = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(META_STORE)) {
-        db.createObjectStore(META_STORE);
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+// 从 JSON 文件导入数据
+async function importFromJSON(file) {
+  const text = await file.text();
+  const data = JSON.parse(text);
+  await apiFetch('/api/bulk', {
+    method: 'POST',
+    body: JSON.stringify(data)
   });
-}
-async function metaGet(key) {
-  const db = await openMetaDB();
-  return new Promise(resolve => {
-    const tx = db.transaction(META_STORE, 'readonly');
-    const req = tx.objectStore(META_STORE).get(key);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => resolve(null);
-  });
-}
-async function metaSet(key, value) {
-  const db = await openMetaDB();
-  return new Promise(resolve => {
-    const tx = db.transaction(META_STORE, 'readwrite');
-    tx.objectStore(META_STORE).put(value, key);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => resolve();
-  });
-}
-async function verifyDirPermission(handle) {
-  if (!handle) return false;
-  try {
-    if ((await handle.queryPermission({
-      mode: 'readwrite'
-    })) === 'granted') return true;
-    // 需要用户手势才能 requestPermission，这里只查询不请求
-    return false;
-  } catch (e) {
-    return false;
-  }
-}
-async function requestDirPermission(handle) {
-  if (!handle) return false;
-  try {
-    return (await handle.requestPermission({
-      mode: 'readwrite'
-    })) === 'granted';
-  } catch (e) {
-    return false;
-  }
-}
-async function pickBackupDir() {
-  if (!window.showDirectoryPicker) {
-    throw new Error('当前浏览器不支持文件夹选择，请使用 Chrome 或 Edge');
-  }
-  const handle = await window.showDirectoryPicker({
-    mode: 'readwrite'
-  });
-  await metaSet('backupDirHandle', handle);
-  return handle;
-}
-async function getBackupDirHandle() {
-  return await metaGet('backupDirHandle');
-}
-async function writeBackupFile(handle, products, members, sales, pointsRecords) {
-  const blob = await exportToSQLite();
-  const now = new Date();
-  const ts = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
-  const filename = `美妆门店备份_${ts}.sqlite`;
-  const fileHandle = await handle.getFileHandle(filename, {
-    create: true
-  });
-  const writable = await fileHandle.createWritable();
-  await writable.write(blob);
-  await writable.close();
-  await metaSet('lastBackupTime', now.toISOString());
-  return filename;
+  return await initFromAPI();
 }
 
 // ===== 登录弹窗 =====
@@ -3583,7 +3365,6 @@ function App() {
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dbBusy, setDbBusy] = useState(false);
-  const [backupDirName, setBackupDirName] = useState('');
   const [lastBackupTime, setLastBackupTime] = useState('');
   const [backingUp, setBackingUp] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -3607,25 +3388,18 @@ function App() {
     }, 3000); // 安全兜底：3秒后强制完成
     (async () => {
       try {
-        await requestPersistentStorage();
-      } catch (e) {
-        console.warn('requestPersistentStorage failed:', e.message);
-      }
-      try {
-        console.log('Initializing SQLite database...');
-        await initSQLiteDB();
-        console.log('SQLite initialized, loading data...');
-        const [p, m, s, r] = await Promise.all([dbGetAll('products'), dbGetAll('members'), dbGetAll('sales'), dbGetAll('pointsRecords')]);
+        console.log('从云端加载数据...');
+        const data = await initFromAPI();
         console.log('Data loaded:', {
-          products: p.length,
-          members: m.length,
-          sales: s.length,
-          pointsRecords: r.length
+          products: data.products.length,
+          members: data.members.length,
+          sales: data.sales.length,
+          pointsRecords: data.pointsRecords.length
         });
-        setProducts(p);
-        setMembers(m);
-        setSales(s);
-        setPointsRecords(r);
+        setProducts(data.products);
+        setMembers(data.members);
+        setSales(data.sales);
+        setPointsRecords(data.pointsRecords);
         initialLoadDoneRef.current = true;
       } catch (e) {
         console.error('加载数据失败', e);
@@ -3640,21 +3414,10 @@ function App() {
     };
   }, []);
 
-  // 数据变更自动同步到 SQLite（初始加载完成后才生效）
+  // 数据变更自动同步到云端（初始加载完成后才生效）
   useEffect(() => {
-    if (!initialLoadDoneRef.current || !sqlDb) return;
-    const timer = setTimeout(async () => {
-      try {
-        await dbPutAll('products', products);
-        await dbPutAll('members', members);
-        await dbPutAll('sales', sales);
-        await dbPutAll('pointsRecords', pointsRecords);
-        console.log('数据已同步到 SQLite');
-      } catch (e) {
-        console.error('同步到 SQLite 失败:', e);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
+    if (!initialLoadDoneRef.current) return;
+    syncToAPI(products, members, sales, pointsRecords);
   }, [products, members, sales, pointsRecords]);
 
   // 登录状态检查 + 定时备份
@@ -3683,9 +3446,9 @@ function App() {
       if (now.getHours() === 22 && now.getMinutes() === 0 && lastRunDate !== todayStr()) {
         lastRunDate = todayStr();
         try {
-          const blob = await exportToSQLite();
+          const blob = await exportToJSON();
           const ts = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
-          downloadBlob(blob, '美妆门店备份_' + ts + '.sqlite');
+          downloadBlob(blob, '美妆门店备份_' + ts + '.json');
           await metaSet('lastBackupTime', now.toISOString());
           setLastBackupTime(now.toISOString());
           console.log('定时备份下载完成');
@@ -3752,40 +3515,25 @@ function App() {
     showToast(newVal ? '已开启每日22:00自动下载备份' : '已关闭定时备份');
   };
 
-  // 加载备份设置（仅读取显示信息，不自动备份）
+  // 加载备份设置
   useEffect(() => {
     if (loading) return;
     (async () => {
       try {
-        const handle = await getBackupDirHandle();
-        if (handle) {
-          setBackupDirName(handle.name || '已设置');
-          const lastTime = await metaGet('lastBackupTime');
-          if (lastTime) setLastBackupTime(lastTime);
-        }
+        const lastTime = await metaGet('lastBackupTime');
+        if (lastTime) setLastBackupTime(lastTime);
       } catch (e) {/* 忽略 */}
     })();
   }, [loading]);
-
-  // 选择备份目录
-  const handlePickBackupDir = async () => {
-    try {
-      const handle = await pickBackupDir();
-      setBackupDirName(handle.name || '已设置');
-      showToast('备份目录已设置: ' + (handle.name || ''));
-    } catch (e) {
-      if (e.name !== 'AbortError') showToast('设置失败: ' + e.message);
-    }
-  };
 
   // 立即备份
   const handleBackupNow = async () => {
     try {
       setBackingUp(true);
-      const blob = await exportToSQLite();
+      const blob = await exportToJSON();
       const now = new Date();
       const ts = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
-      const filename = '美妆门店备份_' + ts + '.sqlite';
+      const filename = '美妆门店备份_' + ts + '.json';
       downloadBlob(blob, filename);
       await metaSet('lastBackupTime', now.toISOString());
       setLastBackupTime(now.toISOString());
@@ -3797,46 +3545,28 @@ function App() {
     }
   };
 
-  // 持久化：数据变化时自动保存到 IndexedDB
-  const saveToDB = useCallback((storeName, items) => {
-    setDbBusy(true);
-    dbPutAll(storeName, items).catch(e => console.error('保存失败:', storeName, e)).finally(() => setDbBusy(false));
-  }, []);
-  useEffect(() => {
-    if (!loading) saveToDB('products', products);
-  }, [products, loading, saveToDB]);
-  useEffect(() => {
-    if (!loading) saveToDB('members', members);
-  }, [members, loading, saveToDB]);
-  useEffect(() => {
-    if (!loading) saveToDB('sales', sales);
-  }, [sales, loading, saveToDB]);
-  useEffect(() => {
-    if (!loading) saveToDB('pointsRecords', pointsRecords);
-  }, [pointsRecords, loading, saveToDB]);
-
-  // SQLite 导出
+  // 导出全部数据为 JSON
   const handleExportDB = async () => {
     try {
-      setToast('正在生成数据库文件...');
-      const blob = await exportToSQLite();
-      downloadBlob(blob, `美妆门店_${todayStr()}.sqlite`);
+      setToast('正在生成数据文件...');
+      const blob = await exportToJSON();
+      downloadBlob(blob, `美妆门店备份_${todayStr()}.json`);
       setToast(null);
-      showToast('数据库已导出');
+      showToast('数据已导出');
     } catch (e) {
       setToast(null);
       showToast('导出失败: ' + e.message);
     }
   };
 
-  // SQLite 导入
+  // 从 JSON 文件导入数据
   const fileRef = useRef(null);
   const handleImportDB = async e => {
     const file = e.target.files[0];
     if (!file) return;
     try {
-      setToast('正在导入数据库...');
-      const data = await importFromSQLite(file);
+      setToast('正在导入数据...');
+      const data = await importFromJSON(file);
       setProducts(data.products || []);
       setMembers(data.members || []);
       setSales(data.sales || []);
@@ -4145,7 +3875,7 @@ function App() {
   }), /*#__PURE__*/React.createElement("button", {
     onClick: handleExportDB,
     className: "flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap",
-    title: "\u5BFC\u51FA SQLite \u6570\u636E\u5E93\u6587\u4EF6"
+    title: "\u5BFC\u51FA JSON \u6570\u636E\u6587\u4EF6"
   }, /*#__PURE__*/React.createElement(DownloadIcon, {
     className: "w-3.5 h-3.5"
   }), " ", /*#__PURE__*/React.createElement("span", {
@@ -4153,7 +3883,7 @@ function App() {
   }, "\u5BFC\u51FA")), /*#__PURE__*/React.createElement("button", {
     onClick: () => fileRef.current && fileRef.current.click(),
     className: "flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap",
-    title: "\u4ECE SQLite \u6587\u4EF6\u5BFC\u5165\u6570\u636E"
+    title: "\u4ECE JSON \u6587\u4EF6\u5BFC\u5165\u6570\u636E"
   }, /*#__PURE__*/React.createElement(UploadIcon, {
     className: "w-3.5 h-3.5"
   }), " ", /*#__PURE__*/React.createElement("span", {
@@ -4161,7 +3891,7 @@ function App() {
   }, "\u5BFC\u5165")), /*#__PURE__*/React.createElement("input", {
     ref: fileRef,
     type: "file",
-    accept: ".sqlite,.db,application/x-sqlite3",
+    accept: ".json,application/json",
     onChange: handleImportDB,
     className: "hidden"
   }), /*#__PURE__*/React.createElement("div", {
