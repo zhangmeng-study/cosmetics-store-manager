@@ -557,18 +557,30 @@ function DashboardPage({ products, members, onCheckout }) {
   const cartTotal = useMemo(() => {
     return cart.reduce((s, i) => {
       const effectivePrice = confirmedItemPrices[i.id] !== undefined ? confirmedItemPrices[i.id] : i.price;
-      const effectiveDiscount = confirmedItemDiscounts[i.id] !== undefined ? confirmedItemDiscounts[i.id] : 1.0;
-      return s + effectivePrice * effectiveDiscount * i.qty;
+      return s + effectivePrice * i.qty;
     }, 0);
-  }, [cart, confirmedItemPrices, confirmedItemDiscounts]);
+  }, [cart, confirmedItemPrices]);
   const member = members.find(m => m.id === memberId);
   const level = member ? getLevel(member.points) : MEMBER_LEVELS[0];
   // Use confirmedDiscount if set, otherwise fall back to level.discount
   const discount = confirmedDiscount !== null ? confirmedDiscount : (editingDiscount && customDiscount !== '' ? (parseFloat(customDiscount) || 1) : level.discount);
-  const calculatedTotal = cartTotal * discount; // Apply global/member discount on top of per-item prices
+  // 会员/全局折扣仅对没有单品折扣的商品生效，有单品折扣的商品直接用折后价
+  const calculatedTotal = useMemo(() => {
+    return cart.reduce((s, i) => {
+      const effectivePrice = confirmedItemPrices[i.id] !== undefined ? confirmedItemPrices[i.id] : i.price;
+      const hasItemDiscount = confirmedItemDiscounts[i.id] !== undefined;
+      const itemDiscount = hasItemDiscount ? confirmedItemDiscounts[i.id] : discount;
+      return s + effectivePrice * itemDiscount * i.qty;
+    }, 0);
+  }, [cart, confirmedItemPrices, confirmedItemDiscounts, discount]);
   // Use confirmedTotal if set, otherwise fall back to calculatedTotal
   const finalTotal = confirmedTotal !== null ? confirmedTotal : (editingTotal && customTotal !== '' ? (parseFloat(customTotal) || 0) : calculatedTotal);
   const change = receivedAmount ? Math.max(0, (parseFloat(receivedAmount) || 0) - finalTotal) : 0;
+
+  // 同步 finalTotalRef 供结账时使用
+  useEffect(() => { finalTotalRef.current = finalTotal; }, [finalTotal]);
+  // 同步 memberIdRef 供结账时使用
+  useEffect(() => { memberIdRef.current = memberId; }, [memberId]);
 
   // Auto-fill received amount when finalTotal changes (if not manually edited)
   useEffect(() => {
@@ -706,15 +718,15 @@ function DashboardPage({ products, members, onCheckout }) {
       memberId: memberIdRef.current || null,
       subtotal: cartTotal,
       discount: discount, // Use current discount value from closure
-      total: finalTotalRef.current,
+      total: finalTotal,
       memberName: member ? member.name : null,
       levelName: level.name,
       paymentMethod: currentPaymentMethod,
       paymentMethodName: pm ? pm.name : '现金',
     });
-    setLastChange(changeRef.current);
+    setLastChange(change);
     setLastPaymentMethod(currentPaymentMethod); // Save for cash drawer display
-    setLastTotal(finalTotalRef.current); // Save for cash drawer display
+    setLastTotal(finalTotal); // Save for cash drawer display
     setShowCashDrawer(true);
     setPostCheckout(true);
     setCart([]);
@@ -1217,7 +1229,7 @@ function DashboardPage({ products, members, onCheckout }) {
                         <p className={`text-sm font-medium truncate ${hasCustomPrice ? 'text-blue-600' : 'text-gray-700'}`}>
                           {item.name}
                           {hasCustomPrice && <span className="ml-1 text-xs text-blue-500">(改价)</span>}
-                          {hasCustomDiscount && <span className="ml-1 text-xs text-orange-500">({Math.round((1 - effectiveDiscount) * 100)}%off)</span>}
+                          {hasCustomDiscount && <span className="ml-1 text-xs text-orange-500">({(effectiveDiscount * 10).toFixed(1)}折)</span>}
                         </p>
                         <button 
                           onClick={(e) => { e.stopPropagation(); openItemEdit(item.id); }}
@@ -1269,7 +1281,7 @@ function DashboardPage({ products, members, onCheckout }) {
               <div className="flex justify-between items-center text-sm text-gray-500">
                 <div className="flex items-center gap-1.5">
                   <span>折扣</span>
-                  {discount < 1.0 && <span className="text-xs text-orange-500">({level.name} {Math.round((1 - discount) * 100)}%off)</span>}
+                  {discount < 1.0 && <span className="text-xs text-orange-500">({confirmedDiscount !== null ? '手动折扣' : level.name} {(discount * 10).toFixed(1)}折)</span>}
                   <button onClick={() => { setEditingDiscount(true); setCustomDiscount(String(discount)); }}
                     className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-0.5" title="修改折扣">
                     <EditIcon className="w-3 h-3" />
@@ -1310,13 +1322,13 @@ function DashboardPage({ products, members, onCheckout }) {
                 className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="输入收款金额 (F4)" />
             </div>
-            {receivedAmount && parseFloat(receivedAmount) >= finalTotal && (
+            {paymentMethod === 'cash' && receivedAmount && parseFloat(receivedAmount) >= finalTotal && (
               <div className="flex justify-between items-center text-sm pt-1 border-t border-dashed border-gray-200">
                 <span className="text-gray-500">找零</span>
                 <span className="font-semibold text-green-600 text-base">¥{fmt(change)}</span>
               </div>
             )}
-            {receivedAmount && parseFloat(receivedAmount) < finalTotal && (
+            {paymentMethod === 'cash' && receivedAmount && parseFloat(receivedAmount) < finalTotal && (
               <div className="flex justify-between items-center text-sm pt-1 border-t border-dashed border-gray-200">
                 <span className="text-gray-500">还差</span>
                 <span className="font-semibold text-red-500 text-base">¥{fmt(finalTotal - (parseFloat(receivedAmount) || 0))}</span>
@@ -1372,7 +1384,7 @@ function DashboardPage({ products, members, onCheckout }) {
                 <span className="text-gray-500">应收金额</span>
                 <span className="font-bold text-blue-600 text-lg">¥{fmt(lastTotal)}</span>
               </div>
-              {lastChange > 0 && (
+              {lastPaymentMethod === 'cash' && lastChange > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">找零</span>
                   <span className="font-bold text-green-600 text-lg">¥{fmt(lastChange)}</span>
@@ -1502,7 +1514,7 @@ function DashboardPage({ products, members, onCheckout }) {
                   </div>
                   {itemCustomDiscounts[editingItemId] && (
                     <p className="text-xs text-orange-500 mt-1">
-                      新折扣: {(tempDiscount * 100).toFixed(0)}% off
+                      新折扣: {(tempDiscount * 10).toFixed(1)}折
                       {tempDiscount < 1.0 && (
                         <span className="ml-1">
                           (省 ¥{fmt((1 - tempDiscount) * currentPrice * item.qty)})
@@ -1928,7 +1940,7 @@ function MembersPage({ members, onSaveMember, onDeleteMember, pointsRecords, onA
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [pointsMember, setPointsMember] = useState(null);
-  const [viewMode, setViewMode] = useState('card'); // 'card' or 'table'
+  const [viewMode, setViewMode] = useState('table'); // 'card' or 'table'
 
   const filtered = useMemo(() => {
     if (!search.trim()) return members;
@@ -2094,6 +2106,7 @@ function MembersPage({ members, onSaveMember, onDeleteMember, pointsRecords, onA
 // ===== 营业统计 =====
 function StatsPage({ sales, products, onDeleteSale }) {
   const [period, setPeriod] = useState('today');
+  const [returningSaleId, setReturningSaleId] = useState(null);
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -2256,11 +2269,7 @@ function StatsPage({ sales, products, onDeleteSale }) {
                       <td className="px-4 py-3 text-right text-gray-400 line-through">¥{fmt(sale.subtotal)}</td>
                       <td className="px-4 py-3 text-right text-blue-600 font-medium">¥{fmt(sale.total)}</td>
                       <td className="px-4 py-3 text-center">
-                        <button onClick={() => {
-                          if (confirm(`确定退货吗？\n\n商品：${sale.items.map(i => `${i.name}×${i.qty}`).join('，')}\n退款：¥${fmt(sale.total)}\n\n退货后库存将恢复，会员积分将扣减。`)) {
-                            onDeleteSale(sale.id);
-                          }
-                        }}
+                        <button onClick={() => setReturningSaleId(sale.id)}
                           className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors text-xs inline-flex items-center gap-1">
                           <ReceiptIcon className="w-3.5 h-3.5" /> 退货
                         </button>
@@ -2273,6 +2282,55 @@ function StatsPage({ sales, products, onDeleteSale }) {
           </div>
         </>
       )}
+
+      {/* 退货确认弹窗 */}
+      {returningSaleId && (() => {
+        const sale = sales.find(s => s.id === returningSaleId);
+        if (!sale) return null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={() => setReturningSaleId(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-96" onClick={e => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4 text-white">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <ReceiptIcon className="w-5 h-5" />
+                  确认退货
+                </h3>
+              </div>
+              <div className="px-6 py-5 space-y-3">
+                <div className="p-3 bg-gray-50 rounded-lg space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">日期</span>
+                    <span className="font-medium">{sale.date}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">商品</span>
+                    <span className="font-medium text-right max-w-[200px] truncate">{sale.items.map(i => `${i.name}×${i.qty}`).join('，')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">会员</span>
+                    <span className="font-medium">{sale.memberName || '散客'}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 pt-2">
+                    <span className="text-gray-500">退款金额</span>
+                    <span className="font-bold text-red-600">¥{fmt(sale.total)}</span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400">退货后库存将恢复，会员积分将扣减。</p>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex gap-2">
+                <button onClick={() => setReturningSaleId(null)}
+                  className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium">
+                  取消
+                </button>
+                <button onClick={() => { onDeleteSale(sale.id); setReturningSaleId(null); }}
+                  className="flex-1 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">
+                  确认退货
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
