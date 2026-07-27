@@ -3080,61 +3080,77 @@ function StatsPage({
   }), " \u9000\u8D27"))))))))));
 }
 
-// ===== 云端 API（Cloudflare Workers + D1）=====
-const API_BASE = window.__API_BASE__ || 'https://cosmetics-store-api.workers.dev';
-async function apiFetch(path, options) {
-  const res = await fetch(API_BASE + path, {
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    ...options
+// ===== IndexedDB 本地存储 =====
+const DB_NAME = 'cosmetics_store_v2';
+const DB_VERSION = 1;
+const STORES = ['products', 'members', 'sales', 'pointsRecords', 'meta'];
+let dbInstance = null;
+function openDB() {
+  if (dbInstance) return Promise.resolve(dbInstance);
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      for (const store of STORES) {
+        if (!db.objectStoreNames.contains(store)) {
+          db.createObjectStore(store, {
+            keyPath: 'id'
+          });
+        }
+      }
+    };
+    req.onsuccess = () => {
+      dbInstance = req.result;
+      resolve(dbInstance);
+    };
+    req.onerror = () => reject(req.error);
   });
-  if (!res.ok) throw new Error('API 错误: ' + res.status);
-  return res.json();
 }
-const dbGetAll = table => {
-  const map = {
-    products: '/products',
-    members: '/members',
-    sales: '/sales',
-    pointsRecords: '/points-records'
-  };
-  return apiFetch('/api' + (map[table] || '/' + table));
-};
-const dbPutAll = async (table, items) => {
-  await apiFetch('/api/bulk', {
-    method: 'POST',
-    body: JSON.stringify({
-      [table]: items
-    })
-  });
-};
-const metaGet = async key => {
-  try {
-    return await apiFetch('/api/meta/' + encodeURIComponent(key));
-  } catch (e) {
-    return null;
-  }
-};
-const metaSet = async (key, value) => {
-  await fetch(API_BASE + '/api/meta/' + encodeURIComponent(key), {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: typeof value === 'string' ? value : JSON.stringify(value)
-  });
-};
+function dbGetAll(table) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(table, 'readonly');
+    const req = tx.objectStore(table).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  }));
+}
+function dbPutAll(table, items) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(table, 'readwrite');
+    const store = tx.objectStore(table);
+    // 先清空再插入
+    store.clear();
+    for (const item of items) {
+      store.put(item);
+    }
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+function metaGet(key) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('meta', 'readonly');
+    const req = tx.objectStore('meta').get(key);
+    req.onsuccess = () => resolve(req.result ? req.result.value : null);
+    req.onerror = () => reject(req.error);
+  })).catch(() => null);
+}
+function metaSet(key, value) {
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('meta', 'readwrite');
+    tx.objectStore('meta').put({
+      id: key,
+      value
+    });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
 
-// 初始化：从 API 加载全部数据
-async function initFromAPI() {
+// 初始化：从 IndexedDB 加载全部数据
+async function initFromIndexedDB() {
   try {
     const [p, m, s, r] = await Promise.all([dbGetAll('products'), dbGetAll('members'), dbGetAll('sales'), dbGetAll('pointsRecords')]);
-    // 如果 API 返回空且本地有旧数据，尝试迁移
-    if (p.length === 0 && m.length === 0) {
-      const migrated = await tryMigrateOldIndexedDB();
-      if (migrated) return await initFromAPI();
-    }
     return {
       products: p,
       members: m,
@@ -3142,9 +3158,7 @@ async function initFromAPI() {
       pointsRecords: r
     };
   } catch (e) {
-    console.warn('API 加载失败，尝试从旧本地数据迁移...', e.message);
-    const migrated = await tryMigrateOldIndexedDB();
-    if (migrated) return await initFromAPI();
+    console.error('IndexedDB 加载失败:', e);
     return {
       products: [],
       members: [],
@@ -3154,65 +3168,18 @@ async function initFromAPI() {
   }
 }
 
-// 从旧版 IndexedDB 迁移到云端 API
-async function tryMigrateOldIndexedDB() {
-  try {
-    const oldDb = await new Promise((resolve, reject) => {
-      const req = indexedDB.open('cosmetics_store', 1);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-      req.onupgradeneeded = () => resolve(null);
-    });
-    if (!oldDb) return false;
-    const stores = ['products', 'members', 'sales', 'pointsRecords'];
-    const hasStores = stores.every(s => oldDb.objectStoreNames.contains(s));
-    if (!hasStores) {
-      oldDb.close();
-      return false;
-    }
-    console.log('检测到旧版本地数据，开始迁移到云端...');
-    const data = {};
-    for (const s of stores) {
-      data[s] = await new Promise((resolve, reject) => {
-        const tx = oldDb.transaction(s, 'readonly');
-        const req = tx.objectStore(s).getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => reject(req.error);
-      });
-    }
-    oldDb.close();
-    await apiFetch('/api/bulk', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    });
-    console.log('旧数据迁移到云端完成！');
-    return true;
-  } catch (e) {
-    console.warn('迁移失败:', e.message);
-    return false;
-  }
-}
-
-// 数据变更同步到云端（防抖）
+// 数据变更同步到 IndexedDB（防抖）
 let syncTimer = null;
-function syncToAPI(products, members, sales, pointsRecords) {
+function syncToIndexedDB(products, members, sales, pointsRecords) {
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(async () => {
     try {
-      await apiFetch('/api/bulk', {
-        method: 'POST',
-        body: JSON.stringify({
-          products,
-          members,
-          sales,
-          pointsRecords
-        })
-      });
-      console.log('数据已同步到云端');
+      await Promise.all([dbPutAll('products', products), dbPutAll('members', members), dbPutAll('sales', sales), dbPutAll('pointsRecords', pointsRecords)]);
+      console.log('数据已保存到本地');
     } catch (e) {
-      console.error('同步到云端失败:', e);
+      console.error('保存到本地失败:', e);
     }
-  }, 500);
+  }, 300);
 }
 
 // 通用下载
@@ -3245,11 +3212,13 @@ async function exportToJSON() {
 async function importFromJSON(file) {
   const text = await file.text();
   const data = JSON.parse(text);
-  await apiFetch('/api/bulk', {
-    method: 'POST',
-    body: JSON.stringify(data)
-  });
-  return await initFromAPI();
+  await Promise.all([dbPutAll('products', data.products || []), dbPutAll('members', data.members || []), dbPutAll('sales', data.sales || []), dbPutAll('pointsRecords', data.pointsRecords || [])]);
+  return {
+    products: data.products || [],
+    members: data.members || [],
+    sales: data.sales || [],
+    pointsRecords: data.pointsRecords || []
+  };
 }
 
 // ===== 登录弹窗 =====
@@ -3307,7 +3276,7 @@ function LoginModal({
     className: "text-xl font-bold text-white"
   }, "\u7F8E\u5986\u95E8\u5E97\u7BA1\u7406\u7CFB\u7EDF"), /*#__PURE__*/React.createElement("p", {
     className: "text-sm text-white text-opacity-80 mt-1"
-  }, isRegister ? '创建新账户' : '登录到云端')), /*#__PURE__*/React.createElement("div", {
+  }, isRegister ? '创建新账户' : '登录系统')), /*#__PURE__*/React.createElement("div", {
     className: "px-6 py-5 space-y-4"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
     className: "block text-sm font-medium text-gray-600 mb-1"
@@ -3372,7 +3341,7 @@ function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [scheduledBackupEnabled, setScheduledBackupEnabled] = useState(false);
 
-  // 初始化：从 IndexedDB 加载数据 + 请求永久存储
+  // 初始化：从 IndexedDB 加载数据
   useEffect(() => {
     let done = false;
     const finish = () => {
@@ -3388,8 +3357,8 @@ function App() {
     }, 3000); // 安全兜底：3秒后强制完成
     (async () => {
       try {
-        console.log('从云端加载数据...');
-        const data = await initFromAPI();
+        console.log('从本地数据库加载数据...');
+        const data = await initFromIndexedDB();
         console.log('Data loaded:', {
           products: data.products.length,
           members: data.members.length,
@@ -3414,10 +3383,10 @@ function App() {
     };
   }, []);
 
-  // 数据变更自动同步到云端（初始加载完成后才生效）
+  // 数据变更自动保存到本地（初始加载完成后才生效）
   useEffect(() => {
     if (!initialLoadDoneRef.current) return;
-    syncToAPI(products, members, sales, pointsRecords);
+    syncToIndexedDB(products, members, sales, pointsRecords);
   }, [products, members, sales, pointsRecords]);
 
   // 登录状态检查 + 定时备份
@@ -3932,7 +3901,7 @@ function App() {
   }, "\u9000\u51FA"))) : /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowLogin(true),
     className: "flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-purple-600 border border-purple-300 rounded-lg hover:bg-purple-50 transition-colors whitespace-nowrap",
-    title: "\u767B\u5F55\u4E91\u7AEF\u8D26\u6237"
+    title: "\u767B\u5F55\u7CFB\u7EDF"
   }, /*#__PURE__*/React.createElement(LockIcon, {
     className: "w-3.5 h-3.5"
   }), " ", /*#__PURE__*/React.createElement("span", {
