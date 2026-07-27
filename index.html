@@ -1089,18 +1089,28 @@ function DashboardPage({
   const cartTotal = useMemo(() => {
     return cart.reduce((s, i) => {
       const effectivePrice = confirmedItemPrices[i.id] !== undefined ? confirmedItemPrices[i.id] : i.price;
-      const effectiveDiscount = confirmedItemDiscounts[i.id] !== undefined ? confirmedItemDiscounts[i.id] : 1.0;
-      return s + effectivePrice * effectiveDiscount * i.qty;
+      return s + effectivePrice * i.qty;
     }, 0);
-  }, [cart, confirmedItemPrices, confirmedItemDiscounts]);
+  }, [cart, confirmedItemPrices]);
   const member = members.find(m => m.id === memberId);
   const level = member ? getLevel(member.points) : MEMBER_LEVELS[0];
   // Use confirmedDiscount if set, otherwise fall back to level.discount
   const discount = confirmedDiscount !== null ? confirmedDiscount : editingDiscount && customDiscount !== '' ? parseFloat(customDiscount) || 1 : level.discount;
-  const calculatedTotal = cartTotal * discount; // Apply global/member discount on top of per-item prices
+  // 会员/全局折扣仅对没有单品折扣的商品生效，有单品折扣的商品直接用折后价
+  const calculatedTotal = cart.reduce((s, i) => {
+    const effectivePrice = confirmedItemPrices[i.id] !== undefined ? confirmedItemPrices[i.id] : i.price;
+    const hasItemDiscount = confirmedItemDiscounts[i.id] !== undefined;
+    const itemDiscount = hasItemDiscount ? confirmedItemDiscounts[i.id] : discount;
+    return s + effectivePrice * itemDiscount * i.qty;
+  }, [cart, confirmedItemPrices, confirmedItemDiscounts, discount]);
   // Use confirmedTotal if set, otherwise fall back to calculatedTotal
   const finalTotal = confirmedTotal !== null ? confirmedTotal : editingTotal && customTotal !== '' ? parseFloat(customTotal) || 0 : calculatedTotal;
   const change = receivedAmount ? Math.max(0, (parseFloat(receivedAmount) || 0) - finalTotal) : 0;
+
+  // 同步 finalTotalRef 供结账时使用
+  useEffect(() => {
+    finalTotalRef.current = finalTotal;
+  }, [finalTotal]);
 
   // Auto-fill received amount when finalTotal changes (if not manually edited)
   useEffect(() => {
@@ -1279,15 +1289,15 @@ function DashboardPage({
       subtotal: cartTotal,
       discount: discount,
       // Use current discount value from closure
-      total: finalTotalRef.current,
+      total: finalTotal,
       memberName: member ? member.name : null,
       levelName: level.name,
       paymentMethod: currentPaymentMethod,
       paymentMethodName: pm ? pm.name : '现金'
     });
-    setLastChange(changeRef.current);
+    setLastChange(change);
     setLastPaymentMethod(currentPaymentMethod); // Save for cash drawer display
-    setLastTotal(finalTotalRef.current); // Save for cash drawer display
+    setLastTotal(finalTotal); // Save for cash drawer display
     setShowCashDrawer(true);
     setPostCheckout(true);
     setCart([]);
