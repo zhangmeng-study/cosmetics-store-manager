@@ -2110,6 +2110,7 @@ function MembersPage({ members, onSaveMember, onDeleteMember, pointsRecords, onA
 function StatsPage({ sales, products, onDeleteSale }) {
   const [period, setPeriod] = useState('today');
   const [returningSaleId, setReturningSaleId] = useState(null);
+  const [returnQtys, setReturnQtys] = useState({});
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -2286,48 +2287,114 @@ function StatsPage({ sales, products, onDeleteSale }) {
         </>
       )}
 
-      {/* 退货确认弹窗 */}
+      {/* 退货确认弹窗 - 支持部分退货 */}
       {returningSaleId && (() => {
         const sale = sales.find(s => s.id === returningSaleId);
         if (!sale) return null;
+        // 计算退货商品退款金额
+        const calcRefund = (items) => items.reduce((sum, i) => sum + (i.price || 0) * i.qty, 0);
+        const allSelected = (sale.items || []).every(i => (returnQtys[i.id] || 0) > 0);
+        const selectedItems = (sale.items || []).filter(i => (returnQtys[i.id] || 0) > 0).map(i => ({ ...i, qty: returnQtys[i.id] }));
+        const refundAmount = calcRefund(selectedItems);
+        const isAllReturned = selectedItems.length === (sale.items || []).length &&
+          selectedItems.every(si => {
+            const orig = (sale.items || []).find(oi => oi.id === si.id);
+            return orig && si.qty >= orig.qty;
+          });
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={() => setReturningSaleId(null)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-96" onClick={e => e.stopPropagation()}>
-              <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4 text-white">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={() => { setReturningSaleId(null); setReturnQtys({}); }}>
+            <div className="bg-white rounded-2xl shadow-2xl w-[440px] max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4 text-white rounded-t-2xl flex-shrink-0">
                 <h3 className="text-lg font-bold flex items-center gap-2">
                   <ReceiptIcon className="w-5 h-5" />
-                  确认退货
+                  退货
                 </h3>
+                <p className="text-xs text-red-100 mt-1">选择需要退货的商品和数量</p>
               </div>
-              <div className="px-6 py-5 space-y-3">
-                <div className="p-3 bg-gray-50 rounded-lg space-y-2 text-sm">
+              <div className="px-6 py-4 flex-1 overflow-y-auto space-y-3">
+                <div className="p-3 bg-gray-50 rounded-lg space-y-1.5 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">订单号</span>
+                    <span className="font-medium text-xs">{sale.id}</span>
+                  </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">日期</span>
                     <span className="font-medium">{sale.date}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">商品</span>
-                    <span className="font-medium text-right max-w-[200px] truncate">{sale.items.map(i => `${i.name}×${i.qty}`).join('，')}</span>
-                  </div>
-                  <div className="flex justify-between">
                     <span className="text-gray-500">会员</span>
                     <span className="font-medium">{sale.memberName || '散客'}</span>
                   </div>
-                  <div className="flex justify-between border-t border-gray-200 pt-2">
-                    <span className="text-gray-500">退款金额</span>
-                    <span className="font-bold text-red-600">¥{fmt(sale.total)}</span>
-                  </div>
                 </div>
-                <p className="text-xs text-gray-400">退货后库存将恢复，会员积分将扣减。</p>
+                {/* 商品列表 */}
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-600">
+                      <input type="checkbox" checked={allSelected} onChange={() => {
+                        if (allSelected) {
+                          setReturnQtys({});
+                        } else {
+                          const q = {};
+                          (sale.items || []).forEach(i => { q[i.id] = i.qty; });
+                          setReturnQtys(q);
+                        }
+                      }} className="rounded border-gray-300" />
+                      全选
+                    </label>
+                    <span className="text-xs text-gray-400">共{(sale.items || []).length}种商品</span>
+                  </div>
+                  {(sale.items || []).map(item => {
+                    const rq = returnQtys[item.id] || 0;
+                    return (
+                      <div key={item.id} className="px-3 py-2.5 border-t border-gray-100 flex items-center gap-3">
+                        <input type="checkbox" checked={rq > 0} onChange={() => {
+                          if (rq > 0) {
+                            setReturnQtys(prev => { const n = { ...prev }; delete n[item.id]; return n; });
+                          } else {
+                            setReturnQtys(prev => ({ ...prev, [item.id]: item.qty }));
+                          }
+                        }} className="rounded border-gray-300 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-800 truncate">{item.name}</div>
+                          <div className="text-xs text-gray-400">¥{fmt(item.price)} × {item.qty}</div>
+                        </div>
+                        {rq > 0 && (
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button onClick={() => setReturnQtys(prev => {
+                              const v = Math.max(0, (prev[item.id] || 0) - 1);
+                              const n = { ...prev }; if (v === 0) delete n[item.id]; else n[item.id] = v; return n;
+                            })} className="w-6 h-6 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center text-sm font-bold">−</button>
+                            <span className="w-8 text-center text-sm font-semibold">{rq}</span>
+                            <button onClick={() => setReturnQtys(prev => ({
+                              ...prev, [item.id]: Math.min(item.qty, (prev[item.id] || 0) + 1)
+                            }))} className="w-6 h-6 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center text-sm font-bold">+</button>
+                            <span className="text-xs text-gray-400">/ {item.qty}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* 退款金额 */}
+                <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                  <span className="text-sm text-gray-600">退款金额</span>
+                  <span className="text-xl font-bold text-red-600">¥{fmt(refundAmount)}</span>
+                </div>
+                <p className="text-xs text-gray-400">退货后库存将恢复，会员积分将按比例扣减。</p>
               </div>
-              <div className="px-6 py-4 border-t border-gray-200 flex gap-2">
-                <button onClick={() => setReturningSaleId(null)}
+              <div className="px-6 py-4 border-t border-gray-200 flex gap-2 flex-shrink-0">
+                <button onClick={() => { setReturningSaleId(null); setReturnQtys({}); }}
                   className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium">
                   取消
                 </button>
-                <button onClick={() => { onDeleteSale(sale.id); setReturningSaleId(null); }}
-                  className="flex-1 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">
-                  确认退货
+                <button disabled={selectedItems.length === 0}
+                  onClick={() => {
+                    onDeleteSale(sale.id, selectedItems);
+                    setReturningSaleId(null);
+                    setReturnQtys({});
+                  }}
+                  className="flex-1 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium">
+                  {isAllReturned ? '确认全部退货' : `确认退货(${selectedItems.length}项)`}
                 </button>
               </div>
             </div>
@@ -3217,38 +3284,83 @@ function App() {
     showToast(`结账成功 ¥${fmt(sale.total)}`);
   };
 
-  // 退货：删除销售记录、恢复库存、扣除积分
-  const deleteSale = (saleId) => {
+  // 退货：支持全部退货和部分退货
+  // returnItems: [{ id, name, price, cost, qty }] 要退的商品列表；不传或为空则整单退
+  const deleteSale = (saleId, returnItems) => {
     setSales(ss => {
       const sale = ss.find(s => s.id === saleId);
       if (!sale) return ss;
-      // 恢复商品库存
+
+      // 如果没有传 returnItems，视为整单退
+      const items = (returnItems && returnItems.length > 0) ? returnItems : (sale.items || []);
+      const refundAmount = items.reduce((sum, i) => sum + (i.price || 0) * i.qty, 0);
+
+      // 判断是否全部退货
+      const isFullReturn = items.length === (sale.items || []).length &&
+        items.every(ri => {
+          const orig = (sale.items || []).find(oi => oi.id === ri.id);
+          return orig && ri.qty >= orig.qty;
+        });
+
+      // 恢复商品库存（仅退被退的商品）
       setProducts(ps => ps.map(p => {
-        const item = sale.items.find(i => i.id === p.id);
+        const item = items.find(i => i.id === p.id);
         if (item) return { ...p, stock: (p.stock || 0) + item.qty, updatedAt: new Date().toISOString() };
         return p;
       }));
+
       // 扣除会员积分 + 积分记录
-      if (sale.memberId) {
+      if (sale.memberId && refundAmount > 0) {
         setMembers(ms => ms.map(m => {
           if (m.id !== sale.memberId) return m;
-          const points = Math.max(0, (m.points || 0) - sale.total);
+          const points = Math.max(0, (m.points || 0) - refundAmount);
           return { ...m, points, updatedAt: new Date().toISOString() };
         }));
         setPointsRecords(rs => [...rs, {
           id: uid(),
           memberId: sale.memberId,
           memberName: sale.memberName || '',
-          points: -sale.total,
+          points: -refundAmount,
           type: '退货扣减',
-          description: `退货退款 ¥${fmt(sale.total)}（${sale.items.map(i => i.name + '×' + i.qty).join('，')}）`,
+          description: `${isFullReturn ? '退货' : '部分退货'}退款 ¥${fmt(refundAmount)}（${items.map(i => i.name + '×' + i.qty).join('，')}）`,
           date: todayStr(),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         }]);
       }
-      showToast(`退货成功，已恢复库存，退款 ¥${fmt(sale.total)}`);
-      return ss.filter(s => s.id !== saleId);
+
+      if (isFullReturn) {
+        // 全部退货：删除销售记录
+        showToast(`退货成功，已恢复库存，退款 ¥${fmt(refundAmount)}`);
+        return ss.filter(s => s.id !== saleId);
+      } else {
+        // 部分退货：更新销售记录，保留剩余商品
+        const remainingItems = (sale.items || []).map(orig => {
+          const returned = items.find(ri => ri.id === orig.id);
+          if (returned) {
+            const remainQty = orig.qty - returned.qty;
+            if (remainQty <= 0) return null;
+            return { ...orig, qty: remainQty };
+          }
+          return orig;
+        }).filter(Boolean);
+
+        const remainingSubtotal = remainingItems.reduce((sum, i) => sum + (i.price || 0) * i.qty, 0);
+        const discount = sale.subtotal > 0 ? (sale.total || sale.subtotal) / sale.subtotal : 1;
+        const remainingTotal = remainingSubtotal * discount;
+
+        showToast(`部分退货成功，退款 ¥${fmt(refundAmount)}，剩余 ¥${fmt(remainingTotal)}`);
+        return ss.map(s => {
+          if (s.id !== saleId) return s;
+          return {
+            ...s,
+            items: remainingItems,
+            itemsJson: JSON.stringify(remainingItems),
+            subtotal: remainingSubtotal,
+            total: remainingTotal,
+          };
+        });
+      }
     });
   };
 
