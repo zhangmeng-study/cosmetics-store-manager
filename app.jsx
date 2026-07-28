@@ -2291,8 +2291,9 @@ function StatsPage({ sales, products, onDeleteSale }) {
       {returningSaleId && (() => {
         const sale = sales.find(s => s.id === returningSaleId);
         if (!sale) return null;
-        // 计算退货商品退款金额
-        const calcRefund = (items) => items.reduce((sum, i) => sum + (i.price || 0) * i.qty, 0);
+        // 计算退货商品退款金额（按折扣比例计算）
+        const discountRatio = sale.subtotal > 0 ? (sale.total || sale.subtotal) / sale.subtotal : 1;
+        const calcRefund = (items) => items.reduce((sum, i) => sum + (i.price || 0) * i.qty, 0) * discountRatio;
         const allSelected = (sale.items || []).every(i => (returnQtys[i.id] || 0) > 0);
         const selectedItems = (sale.items || []).filter(i => (returnQtys[i.id] || 0) > 0).map(i => ({ ...i, qty: returnQtys[i.id] }));
         const refundAmount = calcRefund(selectedItems);
@@ -2377,7 +2378,10 @@ function StatsPage({ sales, products, onDeleteSale }) {
                 </div>
                 {/* 退款金额 */}
                 <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                  <span className="text-sm text-gray-600">退款金额</span>
+                  <div>
+                    <span className="text-sm text-gray-600">退款金额</span>
+                    {discountRatio < 1 && <span className="text-xs text-gray-400 ml-2">（{Math.round(discountRatio * 100) / 10}折）</span>}
+                  </div>
                   <span className="text-xl font-bold text-red-600">¥{fmt(refundAmount)}</span>
                 </div>
                 <p className="text-xs text-gray-400">退货后库存将恢复，会员积分将按比例扣减。</p>
@@ -3293,7 +3297,9 @@ function App() {
 
       // 如果没有传 returnItems，视为整单退
       const items = (returnItems && returnItems.length > 0) ? returnItems : (sale.items || []);
-      const refundAmount = items.reduce((sum, i) => sum + (i.price || 0) * i.qty, 0);
+      // 按折扣比例计算退款金额
+      const discountRatio = sale.subtotal > 0 ? (sale.total || sale.subtotal) / sale.subtotal : 1;
+      const refundAmount = items.reduce((sum, i) => sum + (i.price || 0) * i.qty, 0) * discountRatio;
 
       // 判断是否全部退货
       const isFullReturn = items.length === (sale.items || []).length &&
