@@ -27,7 +27,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/mjm/cosmetics-store-manager.git
+git clone https://github.com/mjm-y/cosmetics-store-manager.git
 cd cosmetics-store-manager
 
 # 启动本地服务器
@@ -57,7 +57,7 @@ npx http-server -p 8765 --cors -c-1
 
 1. 在仓库 Settings → Pages 中，选择 `main` 分支作为源
 2. 保存后等待部署完成
-3. 访问 `https://mjm.github.io/cosmetics-store-manager/`
+3. 访问 `https://mjm-y.github.io/cosmetics-store-manager/`
 
 ## 代码更新
 

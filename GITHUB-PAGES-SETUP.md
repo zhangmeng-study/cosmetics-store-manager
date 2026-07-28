@@ -7,7 +7,7 @@
 ### 方法 A：通过 GitHub 网页界面（推荐 - 最简单）
 
 1. **访问你的仓库**：
-   https://github.com/mjm/cosmetics-store-manager
+   https://github.com/mjm-y/cosmetics-store-manager
 
 2. **启用 GitHub Pages**：
    - 点击 "Settings" 标签
@@ -25,7 +25,7 @@
 4. **访问你的网站**：
    部署完成后，访问：
    ```
-   https://mjm.github.io/cosmetics-store-manager/
+   https://mjm-y.github.io/cosmetics-store-manager/
    ```
 
 ### 方法 B：使用 Git 命令行（需要配置 Personal Access Token）
@@ -40,7 +40,7 @@
 
 2. **更新远程仓库 URL**：
    ```bash
-   git remote set-url origin https://YOUR_USERNAME:YOUR_TOKEN@github.com/mjm/cosmetics-store-manager.git
+   git remote set-url origin https://YOUR_USERNAME:YOUR_TOKEN@github.com/mjm-y/cosmetics-store-manager.git
    ```
 
 3. **推送 workflow 文件**：
@@ -55,7 +55,7 @@
 如果上述方法太复杂，可以使用更简单的方式：
 
 1. **在 GitHub Settings 中**：
-   - 访问 https://github.com/mjm/cosmetics-store-manager/settings/pages
+   - 访问 https://github.com/mjm-y/cosmetics-store-manager/settings/pages
    - Source: 选择 **"Deploy from a branch"**
    - Branch: 选择 **"main"** 和 **"/ (root)"**
    - 点击 "Save"
@@ -66,7 +66,7 @@
 
 3. **访问网站**：
    ```
-   https://mjm.github.io/cosmetics-store-manager/
+   https://mjm-y.github.io/cosmetics-store-manager/
    ```
 
 ## 当前状态
@@ -82,7 +82,7 @@
 1. **使用方法 A（网页界面）** - 最简单，推荐
 2. **使用方法 C（简化方案）** - 不需要 workflow 文件
 
-完成后，你的网站将在 `https://mjm.github.io/cosmetics-store-manager/` 可用，完全免费！
+完成后，你的网站将在 `https://mjm-y.github.io/cosmetics-store-manager/` 可用，完全免费！
 
 ## 优势对比
 
