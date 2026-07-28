@@ -717,7 +717,12 @@ function DashboardPage({ products, members, onCheckout }) {
     const currentPaymentMethod = paymentMethodRef.current; // Use ref to get latest value
     const pm = PAYMENT_METHODS.find(p => p.id === currentPaymentMethod);
     onCheckout({
-      items: cartRef.current.map(i => ({ id: i.id, name: i.name, price: i.price, cost: i.cost || 0, qty: i.qty })),
+      items: cartRef.current.map(i => {
+        const ep = confirmedItemPrices[i.id] !== undefined ? confirmedItemPrices[i.id] : i.price;
+        const hasItemDiscount = confirmedItemDiscounts[i.id] !== undefined;
+        const itemDiscount = hasItemDiscount ? confirmedItemDiscounts[i.id] : discount;
+        return { id: i.id, name: i.name, price: i.price, cost: i.cost || 0, qty: i.qty, effectivePrice: +(ep * itemDiscount).toFixed(2) };
+      }),
       memberId: memberIdRef.current || null,
       subtotal: cartTotal,
       discount: discount, // Use current discount value from closure
@@ -2291,9 +2296,10 @@ function StatsPage({ sales, products, onDeleteSale }) {
       {returningSaleId && (() => {
         const sale = sales.find(s => s.id === returningSaleId);
         if (!sale) return null;
-        // 计算退货商品退款金额（按折扣比例计算）
+        // 计算退货商品退款金额：优先用每个商品自己的 effectivePrice，旧数据无此字段时用统一折扣比例兜底
         const discountRatio = sale.subtotal > 0 ? (sale.total || sale.subtotal) / sale.subtotal : 1;
-        const calcRefund = (items) => items.reduce((sum, i) => sum + (i.price || 0) * i.qty, 0) * discountRatio;
+        const itemRefundPrice = (i) => i.effectivePrice != null ? i.effectivePrice : (i.price || 0) * discountRatio;
+        const calcRefund = (items) => items.reduce((sum, i) => sum + itemRefundPrice(i) * i.qty, 0);
         const allSelected = (sale.items || []).every(i => (returnQtys[i.id] || 0) > 0);
         const selectedItems = (sale.items || []).filter(i => (returnQtys[i.id] || 0) > 0).map(i => ({ ...i, qty: returnQtys[i.id] }));
         const refundAmount = calcRefund(selectedItems);
@@ -2357,7 +2363,11 @@ function StatsPage({ sales, products, onDeleteSale }) {
                         }} className="rounded border-gray-300 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-gray-800 truncate">{item.name}</div>
-                          <div className="text-xs text-gray-400">¥{fmt(item.price)} × {item.qty}</div>
+                          <div className="text-xs text-gray-400">
+                            {item.effectivePrice != null && item.effectivePrice !== item.price
+                              ? <><span className="text-red-500 font-medium">¥{fmt(item.effectivePrice)}</span> <span className="line-through">¥{fmt(item.price)}</span> × {item.qty}</>
+                              : <>¥{fmt(item.price)} × {item.qty}</>}
+                          </div>
                         </div>
                         {rq > 0 && (
                           <div className="flex items-center gap-1 flex-shrink-0">
@@ -2378,10 +2388,7 @@ function StatsPage({ sales, products, onDeleteSale }) {
                 </div>
                 {/* 退款金额 */}
                 <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                  <div>
-                    <span className="text-sm text-gray-600">退款金额</span>
-                    {discountRatio < 1 && <span className="text-xs text-gray-400 ml-2">（{Math.round(discountRatio * 100) / 10}折）</span>}
-                  </div>
+                  <span className="text-sm text-gray-600">退款金额</span>
                   <span className="text-xl font-bold text-red-600">¥{fmt(refundAmount)}</span>
                 </div>
                 <p className="text-xs text-gray-400">退货后库存将恢复，会员积分将按比例扣减。</p>
@@ -3297,9 +3304,10 @@ function App() {
 
       // 如果没有传 returnItems，视为整单退
       const items = (returnItems && returnItems.length > 0) ? returnItems : (sale.items || []);
-      // 按折扣比例计算退款金额
+      // 按每个商品的实际成交价计算退款（旧数据无 effectivePrice 时用统一折扣比例兜底）
       const discountRatio = sale.subtotal > 0 ? (sale.total || sale.subtotal) / sale.subtotal : 1;
-      const refundAmount = items.reduce((sum, i) => sum + (i.price || 0) * i.qty, 0) * discountRatio;
+      const itemRefundPrice = (i) => i.effectivePrice != null ? i.effectivePrice : (i.price || 0) * discountRatio;
+      const refundAmount = items.reduce((sum, i) => sum + itemRefundPrice(i) * i.qty, 0);
 
       // 判断是否全部退货
       const isFullReturn = items.length === (sale.items || []).length &&
@@ -3351,9 +3359,8 @@ function App() {
           return orig;
         }).filter(Boolean);
 
-        const remainingSubtotal = remainingItems.reduce((sum, i) => sum + (i.price || 0) * i.qty, 0);
-        const discount = sale.subtotal > 0 ? (sale.total || sale.subtotal) / sale.subtotal : 1;
-        const remainingTotal = remainingSubtotal * discount;
+        const remainingSubtotal = remainingItems.reduce((sum, i) => sum + (i.effectivePrice != null ? i.effectivePrice : (i.price || 0)) * i.qty, 0);
+        const remainingTotal = +remainingSubtotal.toFixed(2);
 
         showToast(`部分退货成功，退款 ¥${fmt(refundAmount)}，剩余 ¥${fmt(remainingTotal)}`);
         return ss.map(s => {
