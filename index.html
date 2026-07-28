@@ -918,11 +918,11 @@ function ImportModal({
             const found = CATEGORIES.find(c => c.name === cat || c.id === cat);
             return found ? found.id : 'other';
           })(),
-          price: parseFloat(row['单价'] || row['价格'] || row['price'] || 0) || 0,
+          price: parseFloat(row['单价'] || row['售价'] || row['价格'] || row['price'] || 0) || 0,
           cost: parseFloat(row['成本价'] || row['成本'] || row['cost'] || 0) || 0,
           stock: parseInt(row['库存'] || row['数量'] || row['stock'] || 0) || 0,
           barcode: String(row['条码'] || row['barcode'] || ''),
-          description: row['描述'] || row['说明'] || row['description'] || '',
+          description: row['描述'] || row['备注'] || row['说明'] || row['description'] || '',
           id: uid()
         }));
         setPreview(mapped);
@@ -3386,6 +3386,7 @@ async function exportToJSON() {
 
   // 构建商品 sheet 数据
   const productRows = p.map(item => ({
+    'ID': item.id || '',
     '商品名称': item.name || '',
     '分类': getCategoryName(item.category),
     '售价': item.price || 0,
@@ -3394,11 +3395,13 @@ async function exportToJSON() {
     '库存': item.stock || 0,
     '条码': item.barcode || '',
     '单位': item.unit || '',
+    '备注': item.description || '',
     '创建时间': item.createdAt ? fmtDate(item.createdAt) : ''
   }));
 
   // 构建会员 sheet 数据
   const memberRows = m.map(item => ({
+    'ID': item.id || '',
     '姓名': item.name || '',
     '手机号': item.phone || '',
     '等级': getLevelName(item.level),
@@ -3415,13 +3418,23 @@ async function exportToJSON() {
     '日期': item.date || '',
     '商品明细': typeof item.itemsJson === 'string' ? item.itemsJson : JSON.stringify(item.items || item.itemsJson || []),
     '小计': item.subtotal || 0,
+    '折扣': item.discount || 1,
+    '会员折扣': item.memberDiscount || 1,
     '总计': item.total || 0,
+    '支付方式': item.paymentMethod || '',
+    '收款金额': item.receivedAmount || 0,
+    '找零': item.change || 0,
+    '会员ID': item.memberId || '',
     '会员': item.memberName || '',
+    '会员等级': item.levelName || '',
+    '获得积分': item.pointsEarned || 0,
     '创建时间': item.createdAt ? fmtDate(item.createdAt) : ''
   }));
 
   // 构建积分记录 sheet 数据
   const pointsRows = r.map(item => ({
+    'ID': item.id || '',
+    '会员ID': item.memberId || '',
     '会员': item.memberName || '',
     '积分': item.points || 0,
     '类型': item.type || '',
@@ -3435,6 +3448,8 @@ async function exportToJSON() {
   if (productRows.length > 0) {
     const ws1 = XLSX.utils.json_to_sheet(productRows);
     ws1['!cols'] = [{
+      wch: 16
+    }, {
       wch: 20
     }, {
       wch: 10
@@ -3451,6 +3466,8 @@ async function exportToJSON() {
     }, {
       wch: 6
     }, {
+      wch: 20
+    }, {
       wch: 12
     }];
     XLSX.utils.book_append_sheet(wb, ws1, '商品');
@@ -3458,6 +3475,8 @@ async function exportToJSON() {
   if (memberRows.length > 0) {
     const ws2 = XLSX.utils.json_to_sheet(memberRows);
     ws2['!cols'] = [{
+      wch: 16
+    }, {
       wch: 12
     }, {
       wch: 14
@@ -3487,9 +3506,25 @@ async function exportToJSON() {
     }, {
       wch: 10
     }, {
+      wch: 8
+    }, {
+      wch: 8
+    }, {
       wch: 10
     }, {
+      wch: 10
+    }, {
+      wch: 10
+    }, {
+      wch: 10
+    }, {
+      wch: 16
+    }, {
       wch: 12
+    }, {
+      wch: 12
+    }, {
+      wch: 10
     }, {
       wch: 12
     }];
@@ -3498,6 +3533,10 @@ async function exportToJSON() {
   if (pointsRows.length > 0) {
     const ws4 = XLSX.utils.json_to_sheet(pointsRows);
     ws4['!cols'] = [{
+      wch: 16
+    }, {
+      wch: 16
+    }, {
       wch: 12
     }, {
       wch: 8
@@ -3527,65 +3566,101 @@ async function importFromJSON(file) {
   const wb = XLSX.read(data, {
     type: 'array'
   });
-  const parseSheet = name => {
-    const sheet = wb.Sheets[name];
-    if (!sheet) return [];
-    return XLSX.utils.sheet_to_json(sheet);
+  const parseSheet = names => {
+    // 支持多个 sheet 名称变体，兼容全量导出和自动导出的命名
+    for (const name of names) {
+      const sheet = wb.Sheets[name];
+      if (sheet) return XLSX.utils.sheet_to_json(sheet);
+    }
+    return [];
   };
-  const productRows = parseSheet('商品');
-  const memberRows = parseSheet('会员');
-  const salesRows = parseSheet('销售记录');
-  const pointsRows = parseSheet('积分记录');
+  const productRows = parseSheet(['商品', '商品记录']);
+  const memberRows = parseSheet(['会员', '会员记录']);
+  const salesRows = parseSheet(['销售记录', '销售']);
+  const pointsRows = parseSheet(['积分记录', '积分']);
 
   // 转换商品数据
   const products = productRows.map(row => ({
-    id: uid(),
-    name: row['商品名称'] || '',
+    id: row['ID'] || uid(),
+    name: row['商品名称'] || row['名称'] || row['name'] || '',
     category: CATEGORIES.find(c => c.name === row['分类'])?.id || row['分类'] || '',
-    price: parseFloat(row['售价']) || 0,
-    cost: parseFloat(row['成本价']) || 0,
-    stock: parseInt(row['库存']) || 0,
-    barcode: row['条码'] || '',
-    unit: row['单位'] || '',
+    price: parseFloat(row['售价'] || row['单价'] || row['价格'] || row['price']) || 0,
+    cost: parseFloat(row['成本价'] || row['成本'] || row['cost']) || 0,
+    stock: parseInt(row['库存'] || row['数量'] || row['stock']) || 0,
+    barcode: row['条码'] || row['barcode'] || '',
+    unit: row['单位'] || row['unit'] || '',
+    description: row['备注'] || row['描述'] || row['说明'] || row['description'] || '',
     createdAt: row['创建时间'] ? new Date(row['创建时间']).toISOString() : new Date().toISOString()
   }));
 
   // 转换会员数据
   const members = memberRows.map(row => ({
-    id: uid(),
-    name: row['姓名'] || '',
-    phone: row['手机号'] || '',
+    id: row['ID'] || uid(),
+    name: row['姓名'] || row['名称'] || row['name'] || '',
+    phone: row['手机号'] || row['电话'] || row['phone'] || '',
     level: MEMBER_LEVELS.find(l => l.name === row['等级'])?.id || row['等级'] || '',
-    points: parseInt(row['积分']) || 0,
-    birthday: row['生日'] || '',
-    note: row['备注'] || '',
+    points: parseInt(row['积分'] || row['points']) || 0,
+    birthday: row['生日'] || row['birthday'] || '',
+    note: row['备注'] || row['说明'] || row['note'] || '',
     createdAt: row['创建时间'] ? new Date(row['创建时间']).toISOString() : new Date().toISOString()
   }));
+
+  // 构建会员名称到 ID 的映射，用于恢复销售/积分记录中的会员关联
+  const memberNameToId = {};
+  members.forEach(m => {
+    if (m.name) memberNameToId[m.name] = m.id;
+  });
+  // 同时用手机号建立映射
+  members.forEach(m => {
+    if (m.phone && !memberNameToId[m.phone]) memberNameToId[m.phone] = m.id;
+  });
 
   // 转换销售记录数据
-  const sales = salesRows.map(row => ({
-    id: row['订单号'] || uid(),
-    date: row['日期'] || '',
-    itemsJson: row['商品明细'] || '[]',
-    subtotal: parseFloat(row['小计']) || 0,
-    total: parseFloat(row['总计']) || 0,
-    memberId: '',
-    memberName: row['会员'] || '',
-    levelName: '',
-    createdAt: row['创建时间'] ? new Date(row['创建时间']).toISOString() : new Date().toISOString()
-  }));
+  const sales = salesRows.map(row => {
+    const memberName = row['会员'] || row['会员名'] || row['memberName'] || '';
+    const memberId = row['会员ID'] || row['memberId'] || memberNameToId[memberName] || '';
+    const itemsJson = row['商品明细'] || row['itemsJson'] || '[]';
+    let items = [];
+    try {
+      items = typeof itemsJson === 'string' ? JSON.parse(itemsJson) : itemsJson;
+    } catch (e) {
+      items = [];
+    }
+    return {
+      id: row['订单号'] || row['id'] || uid(),
+      date: row['日期'] || row['date'] || '',
+      items,
+      itemsJson,
+      subtotal: parseFloat(row['小计'] || row['subtotal']) || 0,
+      discount: parseFloat(row['折扣'] || row['discount']) || 1,
+      memberDiscount: parseFloat(row['会员折扣'] || row['memberDiscount']) || 1,
+      total: parseFloat(row['总计'] || row['total']) || 0,
+      paymentMethod: row['支付方式'] || row['paymentMethod'] || '',
+      receivedAmount: parseFloat(row['收款金额'] || row['receivedAmount']) || 0,
+      change: parseFloat(row['找零'] || row['change']) || 0,
+      memberId,
+      memberName,
+      levelName: row['会员等级'] || row['levelName'] || '',
+      pointsEarned: parseInt(row['获得积分'] || row['pointsEarned']) || 0,
+      createdAt: row['创建时间'] ? new Date(row['创建时间']).toISOString() : new Date().toISOString()
+    };
+  });
 
   // 转换积分记录数据
-  const pointsRecords = pointsRows.map(row => ({
-    id: uid(),
-    memberId: '',
-    memberName: row['会员'] || '',
-    points: parseInt(row['积分']) || 0,
-    type: row['类型'] || '',
-    description: row['说明'] || '',
-    date: row['日期'] || '',
-    createdAt: row['创建时间'] ? new Date(row['创建时间']).toISOString() : new Date().toISOString()
-  }));
+  const pointsRecords = pointsRows.map(row => {
+    const memberName = row['会员'] || row['会员名'] || row['memberName'] || '';
+    const memberId = row['会员ID'] || row['memberId'] || memberNameToId[memberName] || '';
+    return {
+      id: row['ID'] || row['id'] || uid(),
+      memberId,
+      memberName,
+      points: parseInt(row['积分'] || row['points']) || 0,
+      type: row['类型'] || row['type'] || '',
+      description: row['说明'] || row['描述'] || row['description'] || '',
+      date: row['日期'] || row['date'] || '',
+      createdAt: row['创建时间'] ? new Date(row['创建时间']).toISOString() : new Date().toISOString()
+    };
+  });
   await Promise.all([dbPutAll('products', products), dbPutAll('members', members), dbPutAll('sales', sales), dbPutAll('pointsRecords', pointsRecords)]);
   return {
     products,
@@ -4017,6 +4092,7 @@ function App() {
       };
       // 构建商品 sheet 数据
       const productRows = todayProducts.map(p => ({
+        'ID': p.id || '',
         '商品名称': p.name || '',
         '分类': getCategoryName(p.category),
         '售价': p.price || 0,
@@ -4025,10 +4101,12 @@ function App() {
         '库存': p.stock || 0,
         '条码': p.barcode || '',
         '单位': p.unit || '',
+        '备注': p.description || '',
         '创建时间': p.createdAt ? fmtDate(p.createdAt) : ''
       }));
       // 构建会员 sheet 数据
       const memberRows = todayMembers.map(m => ({
+        'ID': m.id || '',
         '姓名': m.name || '',
         '手机号': m.phone || '',
         '等级': getLevelName(m.level),
@@ -4043,6 +4121,8 @@ function App() {
       if (productRows.length > 0) {
         const ws1 = XLSX.utils.json_to_sheet(productRows);
         ws1['!cols'] = [{
+          wch: 16
+        }, {
           wch: 20
         }, {
           wch: 10
@@ -4053,17 +4133,23 @@ function App() {
         }, {
           wch: 8
         }, {
+          wch: 8
+        }, {
           wch: 16
         }, {
           wch: 6
         }, {
+          wch: 20
+        }, {
           wch: 12
         }];
-        XLSX.utils.book_append_sheet(wb, ws1, '商品记录');
+        XLSX.utils.book_append_sheet(wb, ws1, '商品');
       }
       if (memberRows.length > 0) {
         const ws2 = XLSX.utils.json_to_sheet(memberRows);
         ws2['!cols'] = [{
+          wch: 16
+        }, {
           wch: 12
         }, {
           wch: 14
@@ -4080,7 +4166,7 @@ function App() {
         }, {
           wch: 12
         }];
-        XLSX.utils.book_append_sheet(wb, ws2, '会员记录');
+        XLSX.utils.book_append_sheet(wb, ws2, '会员');
       }
       const wbout = XLSX.write(wb, {
         bookType: 'xlsx',
